@@ -47,7 +47,7 @@ function isPathInside(rootPath, targetPath) {
   return !!relative && !relative.startsWith("..") && !path.isAbsolute(relative);
 }
 
-const MONGO_URI = process.env.MONGODB_URI || "mongodb+srv://saarathin_db_user:Saara%402204@cluster0.j3quprm.mongodb.net/mastery?retryWrites=true&w=majority&appName=Cluster0";
+const MONGO_URI = process.env.MONGODB_URI;
 const JWT_SECRET = process.env.JWT_SECRET || "super-secret-jwt-key-2204";
 
 mongoose.connect(MONGO_URI)
@@ -140,7 +140,7 @@ async function startServer() {
   app.use(express.json());
 
   // Multer setup for file uploads
-  const upload = multer({ 
+  const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
   });
@@ -245,7 +245,7 @@ async function startServer() {
       res.status(500).json({ error: "Server error" });
     }
   });
-  
+
   app.put("/api/user/:id/diagnostic", authenticate, async (req, res) => {
     try {
       const { passed, nextLevel } = req.body;
@@ -264,7 +264,7 @@ async function startServer() {
       if (_class) filter.class = _class;
       if (type) filter.type = type;
       if (exam) filter.exam = exam;
-      
+
       const questions = await Question.find(filter);
       res.json(questions.map((q) => ({ ...q.toObject(), id: q._id })));
     } catch (err) {
@@ -291,10 +291,10 @@ async function startServer() {
 
       // Map: display name (used in DB + frontend) → folder name (used in resolveSubjectFolder)
       const subjectMap = {
-        "Physics":     "Physics",
-        "Chemistry":   "Chemistry",
+        "Physics": "Physics",
+        "Chemistry": "Chemistry",
         "Mathematics": "Math",      // resolveSubjectFolder maps Math→Maths
-        "Biology":     "Biology"
+        "Biology": "Biology"
       };
 
       const summary = {};
@@ -339,7 +339,7 @@ async function startServer() {
       }
 
       const { type, subject, chapter, class: _class, year } = req.body;
-      
+
       // Get GridFSBucket from mongoose connection
       const db = mongoose.connection.getClient().db(mongoose.connection.name);
       const bucket = new GridFSBucket(db);
@@ -365,8 +365,8 @@ async function startServer() {
           fileSize: req.file.size
         });
 
-        res.json({ 
-          id: pdf._id, 
+        res.json({
+          id: pdf._id,
           fileId: uploadStream.id,
           filename: req.file.originalname,
           message: "PDF uploaded successfully"
@@ -404,7 +404,7 @@ async function startServer() {
       const bucket = new GridFSBucket(db);
 
       const fileId = new mongoose.Types.ObjectId(req.params.fileId);
-      
+
       // Get metadata
       const pdf = await PDF.findOne({ fileId });
       if (!pdf) {
@@ -564,9 +564,9 @@ async function startServer() {
       const ext = path.extname(filePath).toLowerCase();
       const contentType =
         ext === ".png" ? "image/png" :
-        ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" :
-        ext === ".webp" ? "image/webp" :
-        "application/octet-stream";
+          ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" :
+            ext === ".webp" ? "image/webp" :
+              "application/octet-stream";
 
       res.setHeader("Content-Type", contentType);
       res.setHeader("Content-Length", stat.size);
