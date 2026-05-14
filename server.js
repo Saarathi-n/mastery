@@ -15,7 +15,8 @@ dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const LIBRARY_ROOT = path.join(process.cwd(), "ncert ooks");
+const LIBRARY_ROOT = process.env.LIBRARY_ROOT || path.join(process.cwd(), "..", "ncert ooks"); // Fallback or env
+const PYQ_ROOT = process.env.PYQ_ROOT || path.join(process.cwd(), "..", "pyq"); // Adjust if pyq has a separate folder
 const SECTION_FOLDERS = {
   ncert: "ncert pdf",
   pyq: "pyq practice",
@@ -83,6 +84,7 @@ const mockTestSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   type: String,
   subject: String,
+  chapter: String,
   class: String,
   questions: mongoose.Schema.Types.Mixed,
   score: Number,
@@ -272,13 +274,59 @@ async function startServer() {
 
   app.post("/api/mocktests/submit", authenticate, async (req, res) => {
     try {
-      const { userId, type, subject, class: _class, score, questions } = req.body;
+      const { userId, type, subject, chapter, class: _class, score, questions } = req.body;
       const mockTest = await MockTest.create({
-        userId, type, subject, class: _class, questions, score
+        userId, type, subject, chapter, class: _class, questions, score
       });
       res.json({ id: mockTest._id, score });
     } catch (err) {
       res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  app.get("/api/progress/summary", authenticate, async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const classLevel = req.query.class || "11";
+
+      // Map: display name (used in DB + frontend) → folder name (used in resolveSubjectFolder)
+      const subjectMap = {
+        "Physics":     "Physics",
+        "Chemistry":   "Chemistry",
+        "Mathematics": "Math",      // resolveSubjectFolder maps Math→Maths
+        "Biology":     "Biology"
+      };
+
+      const summary = {};
+
+      for (const [displayName, lookupName] of Object.entries(subjectMap)) {
+        const subjectFolder = resolveSubjectFolder(classLevel, lookupName);
+        let totalChapters = 0;
+
+        if (subjectFolder && fs.existsSync(subjectFolder)) {
+          const entries = await fsp.readdir(subjectFolder, { withFileTypes: true });
+          totalChapters = entries.filter((e) => e.isDirectory()).length;
+        }
+
+        const completedChapters = await MockTest.distinct("chapter", {
+          userId,
+          subject: displayName,
+          type: "mocktest"
+        });
+
+        const finalTotal = Math.max(totalChapters, completedChapters.length);
+
+        if (finalTotal > 0) {
+          summary[displayName] = {
+            completed: completedChapters.length,
+            total: finalTotal
+          };
+        }
+      }
+
+      res.json(summary);
+    } catch (err) {
+      res.status(500).json({ error: "Server error", details: err.message });
     }
   });
 
@@ -560,8 +608,43 @@ async function startServer() {
 
       const data = await fsp.readFile(filePath, "utf-8");
       res.json(JSON.parse(data));
-    } catch (err) {
-      res.status(500).json({ error: "Server error", details: err.message });
+    } catch (error) {
+      console.error("Error reading PYQ JSON:", error);
+      res.status(500).json({ error: "Failed to read PYQ JSON" });
+    }
+  });
+
+  app.get("/api/library/mocktest", authenticate, async (req, res) => {
+    try {
+      const { subject, class: classLevel, chapter } = req.query;
+      if (!subject || !classLevel || !chapter) {
+        res.status(400).json({ error: "subject, class, and chapter are required" });
+        return;
+      }
+
+      const subjectFolder = resolveSubjectFolder(classLevel, subject);
+      if (!subjectFolder) {
+        res.status(400).json({ error: "Invalid subject or class" });
+        return;
+      }
+
+      const filePath = path.join(subjectFolder, chapter, SECTION_FOLDERS.mocktest, "questions.json");
+      if (!isPathInside(subjectFolder, filePath)) {
+        res.status(400).json({ error: "Invalid file path" });
+        return;
+      }
+
+      const exists = await fsp.stat(filePath).catch(() => null);
+      if (!exists || !exists.isFile()) {
+        res.status(404).json({ error: "Mocktest file not found" });
+        return;
+      }
+
+      const data = await fsp.readFile(filePath, "utf-8");
+      res.json({ questions: JSON.parse(data) });
+    } catch (error) {
+      console.error("Error reading Mocktest JSON:", error);
+      res.status(500).json({ error: "Failed to read Mocktest JSON" });
     }
   });
 

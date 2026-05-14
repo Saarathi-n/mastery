@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { FileText, Brain, Target, MessageSquare, Send } from "lucide-react";
+import { FileText, Brain, Target, MessageSquare, Send, Clock, AlertTriangle } from "lucide-react";
 
 export default function SubjectDetails() {
   const { name } = useParams();
@@ -8,6 +8,7 @@ export default function SubjectDetails() {
   const [library, setLibrary] = useState({ chapters: [], loading: true, error: "" });
   const [selectedChapter, setSelectedChapter] = useState("");
   const [activeSection, setActiveSection] = useState("");
+  const [pendingMockChapter, setPendingMockChapter] = useState("");
 
   useEffect(() => {
     const u = localStorage.getItem("user");
@@ -82,6 +83,7 @@ export default function SubjectDetails() {
             chapterName={selectedChapter}
             onBack={() => setSelectedChapter("")}
             onSelect={(section) => setActiveSection(section)}
+            onStartMockTest={(chapterName) => setPendingMockChapter(chapterName)}
           />
         )}
 
@@ -98,17 +100,58 @@ export default function SubjectDetails() {
             subject={name || ""}
             chapterName={selectedChapter}
             onBack={() => setActiveSection("")}
+            isMockTest={false}
           />
         )}
 
-        {!library.loading && !library.error && selectedChapter && activeSection && activeSection === "mocktest" && (
-          <PlaceholderView
-            title="Mock Tests"
+        {!library.loading && !library.error && selectedChapter && activeSection === "mocktest" && (
+          <PyqQuiz
+            subject={name || ""}
             chapterName={selectedChapter}
             onBack={() => setActiveSection("")}
+            isMockTest={true}
           />
         )}
       </div>
+
+      {/* Mock Test Start Confirmation Modal */}
+      {pendingMockChapter && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md mx-4 flex flex-col items-center">
+            <div className="w-14 h-14 rounded-full bg-purple-100 flex items-center justify-center mb-5">
+              <Brain className="w-7 h-7 text-purple-600" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900 mb-1 text-center">Start Mock Test?</h3>
+            <p className="text-gray-500 text-sm text-center mb-2 font-medium">{pendingMockChapter}</p>
+            <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 mb-6 w-full justify-center">
+              <Clock className="w-4 h-4 flex-shrink-0" />
+              <span>You will have <strong>60 minutes</strong> to complete this test. The timer starts immediately.</span>
+            </div>
+            <div className="flex items-start gap-2 text-xs text-gray-500 mb-7 w-full">
+              <AlertTriangle className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+              <span>Once started, you cannot pause. Make sure you are ready before beginning.</span>
+            </div>
+            <div className="flex w-full gap-3">
+              <button
+                onClick={() => setPendingMockChapter("")}
+                className="flex-1 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-semibold text-sm transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setSelectedChapter(pendingMockChapter);
+                  setActiveSection("mocktest");
+                  setPendingMockChapter("");
+                }}
+                className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold text-sm shadow-sm transition-colors"
+              >
+                Start Test
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -137,7 +180,7 @@ function ChapterGrid({ chapters, onSelect }) {
   );
 }
 
-function SectionCards({ chapterName, onBack, onSelect }) {
+function SectionCards({ chapterName, onBack, onSelect, onStartMockTest }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -168,9 +211,9 @@ function SectionCards({ chapterName, onBack, onSelect }) {
         />
         <ResourceCard
           title="Mock Tests"
-          description="Chapter-wise tests"
+          description="Chapter-wise timed test"
           icon={<Brain className="w-6 h-6 text-purple-600" />}
-          onClick={() => onSelect("mocktest")}
+          onClick={() => onStartMockTest(chapterName)}
         />
       </div>
     </div>
@@ -378,18 +421,23 @@ function NcertViewer({ subject, chapter, onBack }) {
   );
 }
 
-function PyqQuiz({ subject, chapterName, onBack }) {
+function PyqQuiz({ subject, chapterName, onBack, isMockTest = false }) {
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [answers, setAnswers] = useState({});
   const [showResults, setShowResults] = useState(false);
   const [activeIndex, setActiveIndex] = useState(null);
+  
+  // Timer state
   const [totalSeconds, setTotalSeconds] = useState(0);
   const [perQuestionSeconds, setPerQuestionSeconds] = useState([]);
+  const [mockTestSeconds, setMockTestSeconds] = useState(3600); // 1 hour for mocktest
+  
   const [rightWidth, setRightWidth] = useState(320);
   const containerRef = useRef(null);
   const timerRef = useRef(null);
+  const mockTimerRef = useRef(null);
   const classLevel = JSON.parse(localStorage.getItem("user") || "{}").currentLevel || "11";
 
   const shuffleArray = (items) => {
@@ -403,32 +451,40 @@ function PyqQuiz({ subject, chapterName, onBack }) {
 
   useEffect(() => {
     const token = localStorage.getItem("token") || "";
-    const fetchPyq = async () => {
+    const fetchQuestions = async () => {
       setLoading(true);
       setError("");
       try {
         const params = new URLSearchParams({ subject, class: classLevel, chapter: chapterName });
-        const res = await fetch(`/api/library/pyq?${params.toString()}`, {
+        const endpoint = isMockTest ? "/api/library/mocktest" : "/api/library/pyq";
+        const res = await fetch(`${endpoint}?${params.toString()}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed to load PYQ" );
-        const shuffled = shuffleArray(data.questions || []);
-        setQuestions(shuffled);
-        setPerQuestionSeconds(new Array(shuffled.length).fill(0));
-        setActiveIndex(shuffled.length ? 0 : null);
+        if (!res.ok) throw new Error(data.error || "Failed to load questions" );
+        
+        let fetchedQuestions = data.questions || [];
+        if (!isMockTest) {
+          fetchedQuestions = shuffleArray(fetchedQuestions);
+        }
+        
+        setQuestions(fetchedQuestions);
+        setPerQuestionSeconds(new Array(fetchedQuestions.length).fill(0));
+        setActiveIndex(fetchedQuestions.length ? 0 : null);
       } catch (err) {
-        setError(err.message || "Failed to load PYQ");
+        setError(err.message || "Failed to load questions");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchPyq();
-  }, [subject, chapterName]);
+    fetchQuestions();
+  }, [subject, chapterName, isMockTest]);
 
   useEffect(() => {
     if (loading || showResults) return;
+    
+    // Per question timer (for PYQ) and overall timer logging
     timerRef.current = window.setInterval(() => {
       setTotalSeconds((prev) => prev + 1);
       setPerQuestionSeconds((prev) => {
@@ -440,10 +496,24 @@ function PyqQuiz({ subject, chapterName, onBack }) {
       });
     }, 1000);
 
+    // Mock test overall countdown timer
+    if (isMockTest) {
+      mockTimerRef.current = window.setInterval(() => {
+        setMockTestSeconds((prev) => {
+          if (prev <= 1) {
+             setShowResults(true); // Auto submit!
+             return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+
     return () => {
       if (timerRef.current) window.clearInterval(timerRef.current);
+      if (mockTimerRef.current) window.clearInterval(mockTimerRef.current);
     };
-  }, [activeIndex, answers, loading, showResults]);
+  }, [activeIndex, answers, loading, showResults, isMockTest]);
 
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -480,9 +550,10 @@ function PyqQuiz({ subject, chapterName, onBack }) {
   };
 
   const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60).toString().padStart(2, "0");
+    const hrs = Math.floor(seconds / 3600).toString().padStart(2, "0");
+    const mins = Math.floor((seconds % 3600) / 60).toString().padStart(2, "0");
     const secs = Math.floor(seconds % 60).toString().padStart(2, "0");
-    return `${mins}:${secs}`;
+    return Number(hrs) > 0 ? `${hrs}:${mins}:${secs}` : `${mins}:${secs}`;
   };
 
   const score = questions.reduce((sum, q, idx) => {
@@ -491,12 +562,43 @@ function PyqQuiz({ subject, chapterName, onBack }) {
     return getAnswerKey(q.answer) === getOptionKey(selected) ? sum + 1 : sum;
   }, 0);
 
+  useEffect(() => {
+    if (showResults && isMockTest && questions.length > 0) {
+      const submitTest = async () => {
+        try {
+          const token = localStorage.getItem("token");
+          const user = JSON.parse(localStorage.getItem("user") || "{}");
+          
+          await fetch("/api/mocktests/submit", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              userId: user.id,
+              type: "mocktest",
+              subject,
+              chapter: chapterName,
+              class: classLevel,
+              score
+            })
+          });
+        } catch (err) {
+          console.error("Failed to submit test:", err);
+        }
+      };
+      submitTest();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showResults]); // Run strictly once when showResults turns true
+
   const buildAssetUrl = (filePath) => {
     const params = new URLSearchParams({
       subject,
       class: classLevel,
       chapter: chapterName,
-      section: "pyq practice",
+      section: isMockTest ? "mocktest" : "pyq practice",
       file: filePath
     });
     return `/api/library/asset?${params.toString()}`;
@@ -506,12 +608,16 @@ function PyqQuiz({ subject, chapterName, onBack }) {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <p className="text-sm text-gray-500">PYQ Practice</p>
+          <p className="text-sm text-gray-500">{isMockTest ? "Mock Test" : "PYQ Practice"}</p>
           <h3 className="text-xl font-semibold text-gray-900">{chapterName}</h3>
         </div>
         <div className="flex items-center gap-6">
           <div className="text-sm text-gray-600">
-            Time: <span className="font-semibold text-gray-900">{formatTime(totalSeconds)}</span>
+            {isMockTest ? (
+              <>Time Left: <span className="font-semibold text-red-600">{formatTime(mockTestSeconds)}</span></>
+            ) : (
+              <>Time: <span className="font-semibold text-gray-900">{formatTime(totalSeconds)}</span></>
+            )}
           </div>
           <button
             onClick={onBack}
@@ -529,17 +635,19 @@ function PyqQuiz({ subject, chapterName, onBack }) {
         <div ref={containerRef} className="flex flex-col lg:flex-row border border-gray-200 rounded-2xl overflow-hidden w-full">
           <div className="flex-1 bg-white p-6 space-y-6">
             {questions.length === 0 && (
-              <div className="text-gray-500">No PYQ questions found for this chapter.</div>
+              <div className="text-gray-500">No questions found for this chapter.</div>
             )}
             {questions.length > 0 && activeIndex !== null && (
               <div className="border rounded-xl p-5 border-blue-200 bg-blue-50/30">
                 <div className="flex items-start justify-between gap-4 mb-3">
-                  <p className="font-medium text-gray-900">
-                    Q{activeIndex + 1}. {questions[activeIndex].question}
+                  <p className="font-medium text-gray-900 whitespace-pre-wrap">
+                    {questions[activeIndex].question || questions[activeIndex].text}
                   </p>
-                  <div className="text-xs text-gray-500 whitespace-nowrap">
-                    Time: {formatTime(perQuestionSeconds[activeIndex] || 0)}
-                  </div>
+                  {!isMockTest && (
+                    <div className="text-xs text-gray-500 whitespace-nowrap">
+                      Time: {formatTime(perQuestionSeconds[activeIndex] || 0)}
+                    </div>
+                  )}
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {questions[activeIndex].options.map((opt) => {
@@ -596,9 +704,9 @@ function PyqQuiz({ subject, chapterName, onBack }) {
                     ))}
                   </div>
                 )}
-                {showResults && questions[activeIndex].solution && (
+                {(showResults && questions[activeIndex].solution || showResults && questions[activeIndex].explanation) && (
                   <div className="mt-3 text-sm text-gray-600">
-                    <span className="font-semibold">Solution: </span>{questions[activeIndex].solution}
+                    <span className="font-semibold">Solution: </span>{questions[activeIndex].solution || questions[activeIndex].explanation}
                   </div>
                 )}
               </div>
@@ -639,16 +747,20 @@ function PyqQuiz({ subject, chapterName, onBack }) {
             )}
           </div>
 
-          <div
-            onMouseDown={handleDrag}
-            className="hidden lg:flex w-2 cursor-col-resize items-center justify-center bg-white"
-          >
-            <div className="h-10 w-0.5 bg-gray-300 rounded-full" />
-          </div>
+          {!isMockTest && (
+            <>
+              <div
+                onMouseDown={handleDrag}
+                className="hidden lg:flex w-2 cursor-col-resize items-center justify-center bg-white"
+              >
+                <div className="h-10 w-0.5 bg-gray-300 rounded-full" />
+              </div>
 
-          <div style={{ width: rightWidth }} className="w-full lg:w-auto border-l border-gray-100">
-            <AIAssistant context={`I am practicing PYQ questions for ${chapterName}.`} containerClass="h-full" bodyClass="flex-1" />
-          </div>
+              <div style={{ width: rightWidth }} className="w-full lg:w-auto border-l border-gray-100">
+                <AIAssistant context={`I am practicing PYQ questions for ${chapterName}.`} containerClass="h-full" bodyClass="flex-1" />
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

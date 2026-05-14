@@ -5,6 +5,7 @@ import { BookOpen, FlaskConical, Calculator, Activity } from "lucide-react";
 export default function Dashboard() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
+  const [progress, setProgress] = useState({});
 
   useEffect(() => {
     try {
@@ -19,6 +20,29 @@ export default function Dashboard() {
       navigate("/login");
     }
   }, [navigate]);
+
+  useEffect(() => {
+    if (!user) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    const fetchProgress = async () => {
+      try {
+        const params = new URLSearchParams({ class: user.currentLevel || "11" });
+        const res = await fetch(`/api/progress/summary?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setProgress(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch progress:", err);
+      }
+    };
+
+    fetchProgress();
+  }, [user]);
 
   if (!user) return null;
 
@@ -40,13 +64,20 @@ export default function Dashboard() {
     }
   };
 
+  const getProgress = (subject) => {
+    const p = progress[subject];
+    if (!p || !p.total) return { completed: 0, total: 0, percent: 0 };
+    const percent = Math.round((p.completed / p.total) * 100);
+    return { completed: p.completed, total: p.total, percent };
+  };
+
   return (
     <div>
       <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between border-b border-gray-200 pb-6">
         <div>
           <h1 className="text-4xl font-serif font-bold text-gray-900 mb-2">Welcome back, {user.name}</h1>
           <p className="text-gray-500">
-            Target: <span className="font-semibold text-gray-900">{user.stream}</span> &bull; 
+            Target: <span className="font-semibold text-gray-900">{user.stream}</span> &bull;
             Level: <span className="font-semibold text-blue-600">{user.currentLevel} Syllabus</span>
           </p>
         </div>
@@ -57,27 +88,36 @@ export default function Dashboard() {
           Your Subjects
         </h2>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {subjects.map(subject => (
-            <Link 
-              key={subject} 
-              to={`/subject/${subject}`}
-              className="group bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all block relative overflow-hidden"
-            >
-              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition transform group-hover:scale-110">
-                {getIcon(subject)}
-              </div>
-              <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mb-6 border border-gray-100">
-                {getIcon(subject)}
-              </div>
-              <h3 className="text-2xl font-semibold text-gray-900 mb-1">{subject}</h3>
-              <p className="text-gray-500 text-sm mb-4">Master chapters, read NCERT & practice PYQs</p>
-              
-              <div className="w-full bg-gray-100 rounded-full h-1.5 mb-2">
-                <div className="bg-blue-600 h-1.5 rounded-full" style={{ width: Math.random() * 60 + 10 + '%' }}></div>
-              </div>
-              <p className="text-xs font-medium text-gray-400">Continue learning</p>
-            </Link>
-          ))}
+          {subjects.map(subject => {
+            const { completed, total, percent } = getProgress(subject);
+            const label = total === 0
+              ? "Not started yet"
+              : completed === 0
+                ? "Not started yet"
+                : `${completed}/${total} chapters tested • ${percent}%`;
+
+            return (
+              <Link
+                key={subject}
+                to={`/subject/${subject}`}
+                className="group bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all block relative overflow-hidden"
+              >
+                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition transform group-hover:scale-110">
+                  {getIcon(subject)}
+                </div>
+                <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mb-6 border border-gray-100">
+                  {getIcon(subject)}
+                </div>
+                <h3 className="text-2xl font-semibold text-gray-900 mb-1">{subject}</h3>
+                <p className="text-gray-500 text-sm mb-4">Master chapters, read NCERT & practice PYQs</p>
+
+                <div className="w-full bg-gray-100 rounded-full h-1.5 mb-2">
+                  <div className="bg-blue-600 h-1.5 rounded-full transition-all duration-500" style={{ width: percent + '%' }}></div>
+                </div>
+                <p className="text-xs font-medium text-gray-400">{label}</p>
+              </Link>
+            );
+          })}
         </div>
       </div>
     </div>
