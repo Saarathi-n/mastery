@@ -1,8 +1,12 @@
 {
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "https://mastery-8v9q.onrender.com/api/:path*"
+      "source": "/api/(.*)",
+      "destination": "https://mastery-8v9q.onrender.com/api/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
