@@ -12,6 +12,13 @@ import multer from "multer";
 import { GridFSBucket } from "mongodb";
 
 dotenv.config();
+import { v2 as cloudinary } from 'cloudinary';
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,6 +36,10 @@ const SUBJECT_FOLDER_MAP = {
   Chemistry: "chemistry"
 };
 
+const CLOUDINARY_LIBRARY_ROOT = "mastery/ncert";
+const CLOUDINARY_PYQ_ROOT = "mastery/pyq";
+const CLOUDINARY_MOCKTEST_ROOT = "mastery/mocktest";
+
 function normalizeClassFolder(classLevel) {
   const match = String(classLevel || "").match(/\d+/);
   if (!match) return "";
@@ -40,6 +51,99 @@ function resolveSubjectFolder(classLevel, subject) {
   const mappedSubject = SUBJECT_FOLDER_MAP[subject] || subject;
   if (!normalizedClass || !mappedSubject) return null;
   return path.join(LIBRARY_ROOT, `${normalizedClass} ${mappedSubject}`);
+}
+
+function resolveCloudinarySubjectPrefix(classLevel, subject) {
+  const normalizedClass = normalizeClassFolder(classLevel);
+  const mappedSubject = SUBJECT_FOLDER_MAP[subject] || subject;
+  if (!normalizedClass || !mappedSubject) return null;
+  return `${CLOUDINARY_LIBRARY_ROOT}/${normalizedClass} ${mappedSubject}`;
+}
+
+function splitCloudinaryFolder(folder) {
+  return String(folder || "")
+    .split("/")
+    .filter(Boolean);
+}
+
+function escapeCloudinaryFolderSegment(segment) {
+  return String(segment || "").replace(/ /g, "\\ ");
+}
+
+function escapeCloudinaryFolderPath(folderPath) {
+  return splitCloudinaryFolder(folderPath).map(escapeCloudinaryFolderSegment).join("/");
+}
+
+function resourceFolder(resource) {
+  if (resource?.folder) return resource.folder;
+  if (resource?.public_id) return path.posix.dirname(resource.public_id);
+  return "";
+}
+
+async function searchCloudinaryRawResources(folderPrefix) {
+  const resources = [];
+  let nextCursor = null;
+  const expression = `folder:${escapeCloudinaryFolderPath(folderPrefix)}/* AND resource_type:raw`;
+
+  do {
+    let builder = cloudinary.search.expression(expression).max_results(500);
+    if (nextCursor) builder = builder.next_cursor(nextCursor);
+    const result = await builder.execute();
+    resources.push(...(result.resources || []));
+    nextCursor = result.next_cursor;
+  } while (nextCursor);
+
+  return resources;
+}
+
+function resourceName(resource) {
+  return resource?.display_name || resource?.filename || path.posix.basename(resource?.public_id || "") || resource?.public_id || "";
+}
+
+function resourceDownloadUrl(resource) {
+  return cloudinary.utils.private_download_url(resource.public_id, resource.format || "bin", {
+    resource_type: "raw",
+    type: "upload"
+  });
+}
+
+function resourceMatchesFile(resource, fileName) {
+  const target = String(fileName || "").toLowerCase();
+  const candidates = [
+    resourceName(resource),
+    resource.public_id,
+    path.parse(resourceName(resource)).name
+  ]
+    .filter(Boolean)
+    .map((value) => String(value).toLowerCase());
+
+  return candidates.includes(target) || candidates.includes(path.parse(target).name);
+}
+
+function normalizeSearchText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function chapterMatchesResource(resource, chapter, subject) {
+  const haystack = normalizeSearchText(`${resource.public_id} ${resourceName(resource)}`);
+  const chapterTerms = normalizeSearchText(chapter).split(/\s+/).filter(Boolean);
+  const subjectAliasMap = {
+    physics: ["physics", "phy"],
+    chemistry: ["chemistry", "chem"],
+    mathematics: ["mathematics", "maths", "math"],
+    math: ["math", "maths"],
+    biology: ["biology", "bio"]
+  };
+
+  const subjectKey = normalizeSearchText(subject).replace(/\s+/g, "");
+  const subjectTerms = subjectAliasMap[subjectKey] || normalizeSearchText(subject).split(/\s+/).filter(Boolean);
+
+  const chapterMatch = chapterTerms.some((term) => term.length > 2 && haystack.includes(term));
+  const subjectMatch = subjectTerms.length === 0 || subjectTerms.some((term) => haystack.includes(term));
+  return chapterMatch && subjectMatch;
 }
 
 function isPathInside(rootPath, targetPath) {
@@ -93,7 +197,12 @@ const mockTestSchema = new mongoose.Schema({
 
 const pdfSchema = new mongoose.Schema({
   filename: { type: String, required: true },
-  fileId: { type: mongoose.Schema.Types.ObjectId, required: true },
+  // GridFS file id (when stored in Mongo GridFS)
+  fileId: { type: mongoose.Schema.Types.ObjectId },
+  // Cloudinary info (when stored in Cloudinary)
+  cloudinary_public_id: String,
+  cloudinary_url: String,
+  cloudinary_folder: String,
   type: { type: String, required: true }, // 'ncert', 'neet', 'jee'
   subject: String,
   chapter: String,
@@ -300,12 +409,19 @@ async function startServer() {
       const summary = {};
 
       for (const [displayName, lookupName] of Object.entries(subjectMap)) {
-        const subjectFolder = resolveSubjectFolder(classLevel, lookupName);
+        const subjectPrefix = resolveCloudinarySubjectPrefix(classLevel, lookupName);
         let totalChapters = 0;
 
-        if (subjectFolder && fs.existsSync(subjectFolder)) {
-          const entries = await fsp.readdir(subjectFolder, { withFileTypes: true });
-          totalChapters = entries.filter((e) => e.isDirectory()).length;
+        if (subjectPrefix) {
+          const resources = await searchCloudinaryRawResources(subjectPrefix);
+          const chapterNames = new Set();
+          for (const resource of resources) {
+            const relative = splitCloudinaryFolder(resourceFolder(resource)).slice(splitCloudinaryFolder(subjectPrefix).length);
+            if (relative.length > 0) {
+              chapterNames.add(relative[0]);
+            }
+          }
+          totalChapters = chapterNames.size;
         }
 
         const completedChapters = await MockTest.distinct("chapter", {
@@ -339,43 +455,85 @@ async function startServer() {
       }
 
       const { type, subject, chapter, class: _class, year } = req.body;
+      // Optionally upload to Cloudinary instead of GridFS
+      const useCloud = process.env.USE_CLOUDINARY === 'true';
+      if (useCloud) {
+        const pubId = path.parse(req.file.originalname).name;
+        const folder = req.body.cloudinaryFolder || process.env.CLOUDINARY_DEFAULT_FOLDER || 'mastery';
 
-      // Get GridFSBucket from mongoose connection
-      const db = mongoose.connection.getClient().db(mongoose.connection.name);
-      const bucket = new GridFSBucket(db);
+        const stream = cloudinary.uploader.upload_stream({
+          resource_type: 'raw',
+          folder,
+          public_id: pubId,
+          use_filename: true,
+          unique_filename: false
+        }, async (error, result) => {
+          if (error) {
+            return res.status(500).json({ error: 'Cloud upload failed', details: error.message });
+          }
 
-      // Create upload stream
-      const uploadStream = bucket.openUploadStream(req.file.originalname, {
-        contentType: 'application/pdf'
-      });
+          const pdf = await PDF.create({
+            filename: req.file.originalname,
+            cloudinary_public_id: result.public_id,
+            cloudinary_url: result.secure_url,
+            cloudinary_folder: folder,
+            type,
+            subject,
+            chapter,
+            class: _class,
+            year,
+            uploadedBy: req.user.id,
+            fileSize: req.file.size
+          });
 
-      uploadStream.end(req.file.buffer);
-
-      uploadStream.on('finish', async () => {
-        // Save metadata to PDF collection
-        const pdf = await PDF.create({
-          filename: req.file.originalname,
-          fileId: uploadStream.id,
-          type,
-          subject,
-          chapter,
-          class: _class,
-          year,
-          uploadedBy: req.user.id,
-          fileSize: req.file.size
+          res.json({
+            id: pdf._id,
+            fileId: null,
+            filename: pdf.filename,
+            cloudinary_url: result.secure_url,
+            message: 'PDF uploaded successfully'
+          });
         });
 
-        res.json({
-          id: pdf._id,
-          fileId: uploadStream.id,
-          filename: req.file.originalname,
-          message: "PDF uploaded successfully"
-        });
-      });
+        stream.end(req.file.buffer);
+      } else {
+        // Get GridFSBucket from mongoose connection
+        const db = mongoose.connection.getClient().db(mongoose.connection.name);
+        const bucket = new GridFSBucket(db);
 
-      uploadStream.on('error', (err) => {
-        res.status(500).json({ error: "Upload failed", details: err.message });
-      });
+        // Create upload stream
+        const uploadStream = bucket.openUploadStream(req.file.originalname, {
+          contentType: 'application/pdf'
+        });
+
+        uploadStream.end(req.file.buffer);
+
+        uploadStream.on('finish', async () => {
+          // Save metadata to PDF collection
+          const pdf = await PDF.create({
+            filename: req.file.originalname,
+            fileId: uploadStream.id,
+            type,
+            subject,
+            chapter,
+            class: _class,
+            year,
+            uploadedBy: req.user.id,
+            fileSize: req.file.size
+          });
+
+          res.json({
+            id: pdf._id,
+            fileId: uploadStream.id,
+            filename: req.file.originalname,
+            message: "PDF uploaded successfully"
+          });
+        });
+
+        uploadStream.on('error', (err) => {
+          res.status(500).json({ error: "Upload failed", details: err.message });
+        });
+      }
     } catch (err) {
       res.status(500).json({ error: "Server error", details: err.message });
     }
@@ -390,43 +548,68 @@ async function startServer() {
       if (subject) filter.subject = subject;
       if (_class) filter.class = _class;
 
-      const pdfs = await PDF.find(filter).select("filename type subject chapter class year uploadedAt fileSize");
-      res.json(pdfs.map(p => ({ ...p.toObject(), id: p._id })));
+      const pdfs = await PDF.find(filter).select("filename type subject chapter class year uploadedAt fileSize cloudinary_url cloudinary_public_id fileId");
+      res.json(pdfs.map(p => {
+        const obj = p.toObject();
+        obj.id = obj._id;
+        obj.fileId = obj.cloudinary_url ? String(obj._id) : obj.fileId;
+        return obj;
+      }));
     } catch (err) {
       res.status(500).json({ error: "Server error" });
     }
   });
-
-  // Download PDF Endpoint
+  // Download PDF Endpoint (supports GridFS and Cloudinary)
   app.get("/api/pdfs/download/:fileId", authenticate, async (req, res) => {
     try {
-      const db = mongoose.connection.getClient().db(mongoose.connection.name);
-      const bucket = new GridFSBucket(db);
+      const param = req.params.fileId;
+      let pdf = null;
 
-      const fileId = new mongoose.Types.ObjectId(req.params.fileId);
+      if (mongoose.Types.ObjectId.isValid(param)) {
+        const objId = new mongoose.Types.ObjectId(param);
+        pdf = await PDF.findOne({ $or: [{ fileId: objId }, { _id: objId }] });
+      }
 
-      // Get metadata
-      const pdf = await PDF.findOne({ fileId });
+      if (!pdf) {
+        // Try matching by cloudinary_public_id
+        pdf = await PDF.findOne({ cloudinary_public_id: param });
+      }
+
       if (!pdf) {
         res.status(404).json({ error: "PDF not found" });
         return;
       }
 
+      // If stored on Cloudinary, redirect to a signed download URL
+      if (pdf.cloudinary_url) {
+        res.setHeader('Content-Disposition', `attachment; filename="${pdf.filename}"`);
+        res.redirect(resourceDownloadUrl({ public_id: pdf.cloudinary_public_id, format: path.extname(pdf.filename).replace('.', '') || 'pdf' }));
+        return;
+      }
+
+      // Fallback to GridFS
+      if (!pdf.fileId) {
+        res.status(404).json({ error: 'No file stored on server for this PDF' });
+        return;
+      }
+
+      const db = mongoose.connection.getClient().db(mongoose.connection.name);
+      const bucket = new GridFSBucket(db);
+      const downloadStream = bucket.openDownloadStream(pdf.fileId);
+
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="${pdf.filename}"`);
-
-      const downloadStream = bucket.openDownloadStream(fileId);
       downloadStream.pipe(res);
 
       downloadStream.on('error', () => {
         res.status(404).json({ error: "File not found" });
       });
     } catch (err) {
-      res.status(500).json({ error: "Server error" });
+      res.status(500).json({ error: "Server error", details: err.message });
     }
   });
 
-  // Local library endpoints (filesystem-based)
+  // Cloudinary-backed library endpoints
   app.get("/api/library/chapters", authenticate, async (req, res) => {
     try {
       const { subject, class: classLevel } = req.query;
@@ -435,57 +618,57 @@ async function startServer() {
         return;
       }
 
-      const subjectFolder = resolveSubjectFolder(classLevel, subject);
-      if (!subjectFolder) {
+      const subjectPrefix = resolveCloudinarySubjectPrefix(classLevel, subject);
+      if (!subjectPrefix) {
         res.status(400).json({ error: "Invalid subject or class" });
         return;
       }
 
-      const folderExists = fs.existsSync(subjectFolder);
-      if (!folderExists) {
-        res.status(404).json({ error: "Subject folder not found" });
-        return;
-      }
+      const resources = await searchCloudinaryRawResources(subjectPrefix);
+      const subjectParts = splitCloudinaryFolder(subjectPrefix);
+      const chapterMap = new Map();
 
-      const entries = await fsp.readdir(subjectFolder, { withFileTypes: true });
-      const chapterDirs = entries
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => entry.name)
-        .sort();
+      for (const resource of resources) {
+        const relativeParts = splitCloudinaryFolder(resourceFolder(resource)).slice(subjectParts.length);
+        const chapterName = relativeParts[0];
+        const sectionName = relativeParts[1];
+        const fileName = resourceName(resource);
 
-      const chapters = [];
-      for (const chapterName of chapterDirs) {
-        const chapterPath = path.join(subjectFolder, chapterName);
-        const sections = {};
-
-        for (const [key, folderName] of Object.entries(SECTION_FOLDERS)) {
-          const sectionPath = path.join(chapterPath, folderName);
-          if (!fs.existsSync(sectionPath)) {
-            sections[key] = [];
-            continue;
-          }
-
-          const files = (await fsp.readdir(sectionPath))
-            .filter((file) => file.toLowerCase().endsWith(".pdf"))
-            .sort();
-
-          sections[key] = files.map((file) => {
-            const params = new URLSearchParams({
-              subject,
-              class: classLevel,
-              chapter: chapterName,
-              section: folderName,
-              file
-            });
-            return {
-              name: file,
-              url: `/api/library/file?${params.toString()}`
-            };
-          });
+        if (!chapterName || !sectionName) continue;
+        if (!chapterMap.has(chapterName)) {
+          chapterMap.set(chapterName, {});
         }
 
-        chapters.push({ name: chapterName, sections });
+        const sections = chapterMap.get(chapterName);
+        if (!sections[sectionName]) {
+          sections[sectionName] = [];
+        }
+
+        sections[sectionName].push({
+          name: fileName,
+          url: `/api/library/file?${new URLSearchParams({
+            subject,
+            class: classLevel,
+            chapter: chapterName,
+            section: sectionName,
+            file: fileName
+          }).toString()}`,
+          resourceType: resource.resource_type,
+          format: resource.format
+        });
       }
+
+      const chapters = Array.from(chapterMap.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([name, sections]) => ({
+          name,
+          sections: Object.fromEntries(
+            Object.entries(SECTION_FOLDERS).map(([key, folderName]) => [
+              key,
+              (sections[folderName] || []).sort((a, b) => a.name.localeCompare(b.name))
+            ])
+          )
+        }));
 
       res.json({
         subject,
@@ -505,31 +688,21 @@ async function startServer() {
         return;
       }
 
-      const subjectFolder = resolveSubjectFolder(classLevel, subject);
-      if (!subjectFolder) {
+      const subjectPrefix = resolveCloudinarySubjectPrefix(classLevel, subject);
+      if (!subjectPrefix) {
         res.status(400).json({ error: "Invalid subject or class" });
         return;
       }
 
-      const filePath = path.join(subjectFolder, chapter, section, file);
-      if (!isPathInside(subjectFolder, filePath)) {
-        res.status(400).json({ error: "Invalid file path" });
-        return;
-      }
-
-      const stat = await fsp.stat(filePath).catch(() => null);
-      if (!stat || !stat.isFile()) {
+      const resources = await searchCloudinaryRawResources(`${subjectPrefix}/${chapter}/${section}`);
+      const resource = resources.find((item) => resourceMatchesFile(item, file));
+      if (!resource) {
         res.status(404).json({ error: "File not found" });
         return;
       }
 
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Length", stat.size);
       res.setHeader("Cache-Control", "no-store");
-
-      const stream = fs.createReadStream(filePath);
-      stream.on("error", () => res.status(404).end());
-      stream.pipe(res);
+      res.redirect(resourceDownloadUrl(resource));
     } catch (err) {
       res.status(500).json({ error: "Server error", details: err.message });
     }
@@ -543,25 +716,20 @@ async function startServer() {
         return;
       }
 
-      const subjectFolder = resolveSubjectFolder(classLevel, subject);
-      if (!subjectFolder) {
+      const subjectPrefix = resolveCloudinarySubjectPrefix(classLevel, subject);
+      if (!subjectPrefix) {
         res.status(400).json({ error: "Invalid subject or class" });
         return;
       }
 
-      const filePath = path.join(subjectFolder, chapter, section, file);
-      if (!isPathInside(subjectFolder, filePath)) {
-        res.status(400).json({ error: "Invalid file path" });
-        return;
-      }
-
-      const stat = await fsp.stat(filePath).catch(() => null);
-      if (!stat || !stat.isFile()) {
+      const resources = await searchCloudinaryRawResources(`${subjectPrefix}/${chapter}/${section}`);
+      const resource = resources.find((item) => resourceMatchesFile(item, file));
+      if (!resource) {
         res.status(404).json({ error: "File not found" });
         return;
       }
 
-      const ext = path.extname(filePath).toLowerCase();
+      const ext = path.extname(file).toLowerCase();
       const contentType =
         ext === ".png" ? "image/png" :
           ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" :
@@ -569,12 +737,9 @@ async function startServer() {
               "application/octet-stream";
 
       res.setHeader("Content-Type", contentType);
-      res.setHeader("Content-Length", stat.size);
       res.setHeader("Cache-Control", "no-store");
 
-      const stream = fs.createReadStream(filePath);
-      stream.on("error", () => res.status(404).end());
-      stream.pipe(res);
+      res.redirect(resourceDownloadUrl(resource));
     } catch (err) {
       res.status(500).json({ error: "Server error", details: err.message });
     }
@@ -588,26 +753,66 @@ async function startServer() {
         return;
       }
 
-      const subjectFolder = resolveSubjectFolder(classLevel, subject);
-      if (!subjectFolder) {
+      const subjectPrefix = resolveCloudinarySubjectPrefix(classLevel, subject);
+      if (!subjectPrefix) {
         res.status(400).json({ error: "Invalid subject or class" });
         return;
       }
 
-      const filePath = path.join(subjectFolder, chapter, SECTION_FOLDERS.pyq, "questions.json");
-      if (!isPathInside(subjectFolder, filePath)) {
-        res.status(400).json({ error: "Invalid file path" });
-        return;
+      const files = [];
+
+      const resources = await searchCloudinaryRawResources(`${subjectPrefix}/${chapter}/${SECTION_FOLDERS.pyq}`);
+      const resource = resources.find((item) => resourceMatchesFile(item, "questions.json")) || resources[0];
+      if (!resource) {
+        // Continue and fall back to Cloudinary PYQ docs below.
+      } else {
+        const fetchRes = await fetch(resourceDownloadUrl(resource));
+        if (!fetchRes.ok) {
+          res.status(502).json({ error: "Failed to fetch PYQ from Cloudinary" });
+          return;
+        }
+
+        const contentType = fetchRes.headers.get("content-type") || "";
+        if (contentType.includes("json") || resource.format === "json") {
+          const data = await fetchRes.json();
+          files.push(...(data.files || []));
+          const pyqDocs = await searchCloudinaryRawResources(CLOUDINARY_PYQ_ROOT);
+          const matchingDocs = pyqDocs.filter((item) => chapterMatchesResource(item, chapter, subject));
+          files.push(...matchingDocs.map((item) => ({
+            name: resourceName(item),
+            url: resourceDownloadUrl(item),
+            contentType: item.format || "application/octet-stream"
+          })));
+
+          res.json({
+            chapter,
+            subject,
+            class: classLevel,
+            type: data.type || "PYQ",
+            exam: data.exam || "JEE",
+            questions: data.questions || data,
+            files
+          });
+          return;
+        }
       }
 
-      const exists = await fsp.stat(filePath).catch(() => null);
-      if (!exists || !exists.isFile()) {
-        res.status(404).json({ error: "PYQ file not found" });
-        return;
-      }
+      const pyqDocs = await searchCloudinaryRawResources(CLOUDINARY_PYQ_ROOT);
+      const matchingDocs = pyqDocs.filter((item) => chapterMatchesResource(item, chapter, subject));
 
-      const data = await fsp.readFile(filePath, "utf-8");
-      res.json(JSON.parse(data));
+      res.json({
+        chapter,
+        subject,
+        class: classLevel,
+        type: "PYQ",
+        exam: "JEE",
+        questions: [],
+        files: matchingDocs.map((item) => ({
+          name: resourceName(item),
+          url: resourceDownloadUrl(item),
+          contentType: item.format || "application/octet-stream"
+        }))
+      });
     } catch (error) {
       console.error("Error reading PYQ JSON:", error);
       res.status(500).json({ error: "Failed to read PYQ JSON" });
@@ -622,26 +827,56 @@ async function startServer() {
         return;
       }
 
-      const subjectFolder = resolveSubjectFolder(classLevel, subject);
-      if (!subjectFolder) {
+      const subjectPrefix = resolveCloudinarySubjectPrefix(classLevel, subject);
+      if (!subjectPrefix) {
         res.status(400).json({ error: "Invalid subject or class" });
         return;
       }
 
-      const filePath = path.join(subjectFolder, chapter, SECTION_FOLDERS.mocktest, "questions.json");
-      if (!isPathInside(subjectFolder, filePath)) {
-        res.status(400).json({ error: "Invalid file path" });
-        return;
+      const files = [];
+
+      const resources = await searchCloudinaryRawResources(`${subjectPrefix}/${chapter}/${SECTION_FOLDERS.mocktest}`);
+      const resource = resources.find((item) => resourceMatchesFile(item, "questions.json")) || resources[0];
+      if (!resource) {
+        // Fall through to Cloudinary mocktest docs below.
+      } else {
+        const fetchRes = await fetch(resourceDownloadUrl(resource));
+        if (!fetchRes.ok) {
+          res.status(502).json({ error: "Failed to fetch Mocktest from Cloudinary" });
+          return;
+        }
+
+        const contentType = fetchRes.headers.get("content-type") || "";
+        if (contentType.includes("json") || resource.format === "json") {
+          const data = await fetchRes.json();
+          files.push(...(data.files || []));
+          const mockDocs = await searchCloudinaryRawResources(CLOUDINARY_MOCKTEST_ROOT);
+          const matchingDocs = mockDocs.filter((item) => chapterMatchesResource(item, chapter, subject));
+          files.push(...matchingDocs.map((item) => ({
+            name: resourceName(item),
+            url: resourceDownloadUrl(item),
+            contentType: item.format || "application/octet-stream"
+          })));
+
+          res.json({
+            questions: data.questions || data,
+            files
+          });
+          return;
+        }
       }
 
-      const exists = await fsp.stat(filePath).catch(() => null);
-      if (!exists || !exists.isFile()) {
-        res.status(404).json({ error: "Mocktest file not found" });
-        return;
-      }
+      const mockDocs = await searchCloudinaryRawResources(CLOUDINARY_MOCKTEST_ROOT);
+      const matchingDocs = mockDocs.filter((item) => chapterMatchesResource(item, chapter, subject));
 
-      const data = await fsp.readFile(filePath, "utf-8");
-      res.json({ questions: JSON.parse(data) });
+      res.json({
+        questions: [],
+        files: matchingDocs.map((item) => ({
+          name: resourceName(item),
+          url: resourceDownloadUrl(item),
+          contentType: item.format || "application/octet-stream"
+        }))
+      });
     } catch (error) {
       console.error("Error reading Mocktest JSON:", error);
       res.status(500).json({ error: "Failed to read Mocktest JSON" });

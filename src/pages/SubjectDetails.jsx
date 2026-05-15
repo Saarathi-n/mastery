@@ -423,6 +423,7 @@ function NcertViewer({ subject, chapter, onBack }) {
 
 function PyqQuiz({ subject, chapterName, onBack, isMockTest = false }) {
   const [questions, setQuestions] = useState([]);
+  const [resourceFiles, setResourceFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [answers, setAnswers] = useState({});
@@ -463,6 +464,7 @@ function PyqQuiz({ subject, chapterName, onBack, isMockTest = false }) {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to load questions" );
         
+        setResourceFiles(data.files || []);
         let fetchedQuestions = data.questions || [];
         if (!isMockTest) {
           fetchedQuestions = shuffleArray(fetchedQuestions);
@@ -635,7 +637,25 @@ function PyqQuiz({ subject, chapterName, onBack, isMockTest = false }) {
         <div ref={containerRef} className="flex flex-col lg:flex-row border border-gray-200 rounded-2xl overflow-hidden w-full">
           <div className="flex-1 bg-white p-6 space-y-6">
             {questions.length === 0 && (
-              <div className="text-gray-500">No questions found for this chapter.</div>
+                <div className="space-y-3">
+                  <div className="text-gray-500">No questions found for this chapter.</div>
+                  {resourceFiles.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-semibold text-gray-700">Cloudinary files</p>
+                      {resourceFiles.map((file) => (
+                        <a
+                          key={file.url}
+                          href={file.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block rounded-lg border border-gray-200 px-4 py-3 text-sm text-blue-700 hover:border-blue-400 hover:bg-blue-50"
+                        >
+                          {file.name}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
             )}
             {questions.length > 0 && activeIndex !== null && (
               <div className="border rounded-xl p-5 border-blue-200 bg-blue-50/30">
