@@ -99,6 +99,7 @@ export default function SubjectDetails() {
           <PyqQuiz
             subject={name || ""}
             chapterName={selectedChapter}
+            classLevel={classLevel}
             onBack={() => setActiveSection("")}
             isMockTest={false}
           />
@@ -108,6 +109,7 @@ export default function SubjectDetails() {
           <PyqQuiz
             subject={name || ""}
             chapterName={selectedChapter}
+            classLevel={classLevel}
             onBack={() => setActiveSection("")}
             isMockTest={true}
           />
@@ -421,7 +423,7 @@ function NcertViewer({ subject, chapter, onBack }) {
   );
 }
 
-function PyqQuiz({ subject, chapterName, onBack, isMockTest = false }) {
+function PyqQuiz({ subject, chapterName, classLevel, onBack, isMockTest = false }) {
   const [questions, setQuestions] = useState([]);
   const [resourceFiles, setResourceFiles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -439,7 +441,6 @@ function PyqQuiz({ subject, chapterName, onBack, isMockTest = false }) {
   const containerRef = useRef(null);
   const timerRef = useRef(null);
   const mockTimerRef = useRef(null);
-  const classLevel = JSON.parse(localStorage.getItem("user") || "{}").currentLevel || "11";
 
   const shuffleArray = (items) => {
     const list = [...items];
@@ -542,13 +543,15 @@ function PyqQuiz({ subject, chapterName, onBack, isMockTest = false }) {
   };
 
   const getOptionKey = (option) => {
-    const match = option.match(/^\(([a-dA-D])\)/);
-    return match ? match[1].toLowerCase() : option;
+    if (!option) return "";
+    const match = String(option).match(/^\(([a-dA-D])\)/);
+    return match ? match[1].toLowerCase() : String(option);
   };
 
   const getAnswerKey = (answerText) => {
-    const match = answerText.match(/^\(([a-dA-D])\)/);
-    return match ? match[1].toLowerCase() : answerText;
+    if (!answerText) return "";
+    const match = String(answerText).match(/^\(([a-dA-D])\)/);
+    return match ? match[1].toLowerCase() : String(answerText);
   };
 
   const formatTime = (seconds) => {
@@ -787,30 +790,6 @@ function PyqQuiz({ subject, chapterName, onBack, isMockTest = false }) {
   );
 }
 
-function PlaceholderView({ title, chapterName, onBack }) {
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <p className="text-sm text-gray-500">Selected chapter</p>
-          <h3 className="text-xl font-semibold text-gray-900">{chapterName}</h3>
-        </div>
-        <button
-          onClick={onBack}
-          className="text-sm font-medium text-gray-600 hover:text-gray-900"
-        >
-          Back to resources
-        </button>
-      </div>
-
-      <div className="bg-gray-100 rounded-2xl border border-gray-200 p-10 text-center text-gray-500">
-        {title} will appear here.
-      </div>
-    </div>
-  );
-}
-
-// Reusable AI Assistant Chat Component for sidebars using Gemini directly
 function AIAssistant({ context, containerClass = "", bodyClass = "" }) {
   const [messages, setMessages] = useState([
     { role: "model", text: "Hi! Ask me to explain a concept or why your answer was wrong." }
@@ -820,40 +799,46 @@ function AIAssistant({ context, containerClass = "", bodyClass = "" }) {
   const endOfMsgRef = useRef(null);
 
   useEffect(() => {
-    endOfMsgRef.current?.scrollIntoView({ behavior: 'smooth' });
+    endOfMsgRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const handleSend = async () => {
     if (!input.trim() || loading) return;
+
     const userMsg = input.trim();
-    setMessages(prev => [...prev, { role: "user", text: userMsg }]);
+    const currentMessages = [...messages, { role: "user", text: userMsg }];
+
+    setMessages(currentMessages);
     setInput("");
     setLoading(true);
 
     try {
-      // Dynamically import the Gemini client to avoid breaking the bundle
-      try {
-        const mod = await import('@google/genai');
-        const GoogleGenAI = mod.GoogleGenAI || mod.default?.GoogleGenAI || mod.default;
-        if (!GoogleGenAI) throw new Error('GoogleGenAI not available');
+      const token = localStorage.getItem("token") || "";
+      const response = await fetch("/api/ai/tutor", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          context,
+          messages: currentMessages
+        })
+      });
 
-        const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || "" });
-        const chat = ai.chats.create({
-          model: "gemini-3-flash-preview",
-          config: {
-            systemInstruction: `You are an expert tutor for JEE and NEET students. Context: ${context}. Keep answers concise, educational, and encouraging.`
-          }
-        });
+      const data = await response.json();
 
-        const response = await chat.sendMessage({ message: userMsg });
-        setMessages(prev => [...prev, { role: "model", text: response.text || "" }]);
-      } catch (err) {
-        console.error('AI import/send error:', err);
-        setMessages(prev => [...prev, { role: "model", text: "Sorry, I am having trouble connecting right now." }]);
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to retrieve response");
       }
+
+      setMessages((prev) => [...prev, { role: "model", text: data.reply || "I couldn't generate a response." }]);
     } catch (err) {
-      console.error(err);
-      setMessages(prev => [...prev, { role: "model", text: "Sorry, I am having trouble connecting right now." }]);
+      console.error("AI chat error:", err);
+      setMessages((prev) => [
+        ...prev,
+        { role: "model", text: "Sorry, I am having trouble connecting right now." }
+      ]);
     } finally {
       setLoading(false);
     }

@@ -33,12 +33,58 @@ const SUBJECT_FOLDER_MAP = {
   Mathematics: "Maths",
   Math: "Maths",
   Physics: "physics",
-  Chemistry: "chemistry"
+  Chemistry: "chemistry",
+  Biology: "biology"
 };
 
 const CLOUDINARY_LIBRARY_ROOT = "mastery/ncert";
 const CLOUDINARY_PYQ_ROOT = "mastery/pyq";
 const CLOUDINARY_MOCKTEST_ROOT = "mastery/mocktest";
+
+// Mapping from NCERT Biology Class 11 filename codes to chapter names
+const NCERT_BIOLOGY_11_CHAPTERS = {
+  '01': '01 The Living World',
+  '02': '02 Biological Classification',
+  '03': '03 Plant Kingdom',
+  '04': '04 Animal Kingdom',
+  '05': '05 Morphology of Flowering Plants',
+  '06': '06 Anatomy of Flowering Plants',
+  '07': '07 Structural Organisation in Animals',
+  '08': '08 Cell - The Unit of Life',
+  '09': '09 Biomolecules',
+  '10': '10 Cell Cycle and Cell Division',
+  '11': '11 Photosynthesis in Higher Plants',
+  '12': '12 Respiration in Plants',
+  '13': '13 Plant Growth and Development',
+  '14': '14 Breathing and Exchange of Gases',
+  '15': '15 Body Fluids and Circulation',
+  '16': '16 Excretory Products and Their Elimination',
+  '17': '17 Locomotion and Movement',
+  '18': '18 Neural Control and Coordination',
+  '19': '19 Chemical Coordination and Integration',
+  '20': '20 Appendix',
+  '21': '21 Supplementary',
+  '22': '22 Appendix'
+};
+
+/**
+ * For flat Cloudinary files (no chapter/section subfolders), extract a chapter
+ * number from the filename. E.g. "kebo101" → "01", "kebo119" → "19".
+ * Returns the 2-digit chapter string or null.
+ */
+function extractChapterFromFilename(fileName) {
+  const baseName = path.parse(fileName).name.toLowerCase();
+  // Match patterns like kebo101 (last 2 digits = chapter), keph107, kech201, etc.
+  const match = baseName.match(/(\d{2})$/);
+  return match ? match[1] : null;
+}
+
+function getVirtualChapterName(chapterNum, subject) {
+  if (subject && subject.toLowerCase() === 'biology') {
+    return NCERT_BIOLOGY_11_CHAPTERS[chapterNum] || `Chapter ${chapterNum}`;
+  }
+  return `Chapter ${chapterNum}`;
+}
 
 function normalizeClassFolder(classLevel) {
   const match = String(classLevel || "").match(/\d+/);
@@ -393,6 +439,54 @@ async function startServer() {
     }
   });
 
+  app.post("/api/ai/tutor", async (req, res) => {
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      const { context = "", messages = [] } = req.body || {};
+
+      if (!apiKey) {
+        res.status(500).json({ error: "Gemini API key is not configured" });
+        return;
+      }
+
+      if (!Array.isArray(messages) || messages.length === 0) {
+        res.status(400).json({ error: "messages are required" });
+        return;
+      }
+
+      const contents = messages
+        .filter((message) => message && typeof message.text === "string")
+        .map((message) => ({
+          role: message.role === "user" ? "user" : "model",
+          parts: [{ text: message.text }]
+        }));
+
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [{ text: `You are an expert tutor for JEE and NEET students. Context: ${context}. Keep answers concise, educational, and encouraging.` }]
+          },
+          contents
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error?.message || "Failed to retrieve response");
+      }
+
+      const replyText = data.candidates?.[0]?.content?.parts?.map((part) => part.text).filter(Boolean).join("") || "I couldn't generate a response.";
+      res.json({ reply: replyText });
+    } catch (err) {
+      res.status(500).json({ error: err.message || "Failed to generate tutor response" });
+    }
+  });
+
   app.get("/api/progress/summary", authenticate, async (req, res) => {
     try {
       const userId = req.user.id;
@@ -630,11 +724,28 @@ async function startServer() {
 
       for (const resource of resources) {
         const relativeParts = splitCloudinaryFolder(resourceFolder(resource)).slice(subjectParts.length);
-        const chapterName = relativeParts[0];
-        const sectionName = relativeParts[1];
+        let chapterName = relativeParts[0];
+        let sectionName = relativeParts[1];
         const fileName = resourceName(resource);
 
-        if (!chapterName || !sectionName) continue;
+        // Handle flat files (no chapter/section subfolders, e.g. Biology)
+        if (!chapterName || !sectionName) {
+          if (relativeParts.length <= 1) {
+            // File is directly in subject folder or one level deep without section
+            const chapterNum = extractChapterFromFilename(fileName);
+            if (chapterNum) {
+              chapterName = getVirtualChapterName(chapterNum, subject);
+              sectionName = SECTION_FOLDERS.ncert; // "ncert pdf"
+            } else {
+              // Non-chapter file (e.g. kebo1ps.pdf for problem set)
+              chapterName = 'Supplementary';
+              sectionName = SECTION_FOLDERS.ncert;
+            }
+          } else {
+            continue;
+          }
+        }
+
         if (!chapterMap.has(chapterName)) {
           chapterMap.set(chapterName, {});
         }
@@ -694,8 +805,15 @@ async function startServer() {
         return;
       }
 
-      const resources = await searchCloudinaryRawResources(`${subjectPrefix}/${chapter}/${section}`);
-      const resource = resources.find((item) => resourceMatchesFile(item, file));
+      let resources = await searchCloudinaryRawResources(`${subjectPrefix}/${chapter}/${section}`);
+      let resource = resources.find((item) => resourceMatchesFile(item, file));
+
+      // Fallback: search directly in subject folder (for flat file structures like Biology)
+      if (!resource) {
+        resources = await searchCloudinaryRawResources(subjectPrefix);
+        resource = resources.find((item) => resourceMatchesFile(item, file));
+      }
+
       if (!resource) {
         res.status(404).json({ error: "File not found" });
         return;
