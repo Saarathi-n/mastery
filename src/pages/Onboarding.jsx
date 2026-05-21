@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { GraduationCap, ArrowRight } from "lucide-react";
 
 export default function Onboarding() {
   const navigate = useNavigate();
@@ -55,19 +56,35 @@ export default function Onboarding() {
   if (!user) return null;
 
   return (
-    <div className="max-w-2xl mx-auto mt-12 bg-white rounded-2xl shadow-sm border border-gray-100 p-10 text-center">
-      <h1 className="text-3xl font-serif font-bold text-gray-900 mb-2">Welcome, {user.name}!</h1>
-      <p className="text-gray-500 mb-10">Let's customize your path to mastery.</p>
+    <div className="max-w-3xl mx-auto">
+      <div className="text-center mb-12">
+        <div className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-100 to-purple-100 px-6 py-3 rounded-full mb-6">
+          <GraduationCap className="w-6 h-6 text-indigo-600" />
+          <span className="text-indigo-800 font-bold text-sm">Get Started</span>
+        </div>
+        <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4">
+          Welcome, {user.name}!
+        </h1>
+        <p className="text-xl text-gray-600 leading-relaxed">
+          Let's customize your path to mastery
+        </p>
+      </div>
 
-      <div className="space-y-8 text-left">
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-3">What is your current grade?</label>
-          <div className="grid grid-cols-3 gap-4">
-            {["11th", "12th", "Dropper"].map(g => (
+      <div className="space-y-10">
+        <div className="space-y-5">
+          <label className="block text-xl font-bold text-gray-800">
+            What is your current grade?
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+            {["11th", "12th", "Dropper"].map((g) => (
               <button
                 key={g}
                 onClick={() => setGrade(g)}
-                className={`p-4 rounded-xl border text-center font-medium transition ${grade === g ? "bg-blue-50 border-blue-600 text-blue-700" : "bg-white border-gray-200 text-gray-700 hover:border-gray-300"}`}
+                className={`p-6 rounded-2xl border-3 transition-all duration-300 font-bold text-lg ${
+                  grade === g
+                    ? "bg-gradient-to-br from-indigo-600 to-purple-600 text-white border-transparent shadow-xl hover:shadow-2xl scale-105"
+                    : "bg-white text-gray-700 border-gray-200 hover:border-indigo-400 hover:shadow-lg hover:scale-102"
+                }`}
               >
                 {g}
               </button>
@@ -75,14 +92,20 @@ export default function Onboarding() {
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-3">Which exam are you targeting?</label>
-          <div className="grid grid-cols-3 gap-4">
-            {["JEE", "NEET", "Both"].map(s => (
+        <div className="space-y-5">
+          <label className="block text-xl font-bold text-gray-800">
+            Which exam are you targeting?
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+            {["JEE", "NEET", "Both"].map((s) => (
               <button
                 key={s}
                 onClick={() => setStream(s)}
-                className={`p-4 rounded-xl border text-center font-medium transition ${stream === s ? "bg-blue-50 border-blue-600 text-blue-700" : "bg-white border-gray-200 text-gray-700 hover:border-gray-300"}`}
+                className={`p-6 rounded-2xl border-3 transition-all duration-300 font-bold text-lg ${
+                  stream === s
+                    ? "bg-gradient-to-br from-indigo-600 to-purple-600 text-white border-transparent shadow-xl hover:shadow-2xl scale-105"
+                    : "bg-white text-gray-700 border-gray-200 hover:border-indigo-400 hover:shadow-lg hover:scale-102"
+                }`}
               >
                 {s}
               </button>
@@ -91,13 +114,14 @@ export default function Onboarding() {
         </div>
       </div>
 
-      <div className="mt-12">
+      <div className="mt-12 text-center">
         <button
           onClick={handleSubmit}
           disabled={!grade || !stream || loading}
-          className="w-full sm:w-auto px-10 py-3 rounded-full font-medium text-white bg-black hover:bg-gray-800 disabled:opacity-50 transition"
+          className="inline-flex items-center gap-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-12 py-5 rounded-3xl font-bold text-xl shadow-2xl hover:shadow-3xl hover:-translate-y-2 transition-all duration-300 disabled:opacity-50 disabled:hover:translate-y-0"
         >
           {loading ? "Saving..." : "Continue"}
+          {!loading && <ArrowRight className="w-6 h-6" />}
         </button>
       </div>
     </div>

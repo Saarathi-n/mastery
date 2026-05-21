@@ -12,7 +12,14 @@ export default function SubjectDetails() {
 
   useEffect(() => {
     const u = localStorage.getItem("user");
-    if (u) setUser(JSON.parse(u));
+    if (u) {
+      const parsedUser = JSON.parse(u);
+      setUser(parsedUser);
+      // Enforce Screen Test on subject entry as well
+      if (["12th", "Dropper"].includes(parsedUser.grade) && !parsedUser.diagnosticTestCleared) {
+        window.location.href = "/diagnostic-test";
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -53,19 +60,38 @@ export default function SubjectDetails() {
   const classLevel = user?.currentLevel || "11";
 
   return (
-    <div className="bg-white min-h-[80vh] rounded-2xl border border-gray-100 shadow-sm flex flex-col overflow-hidden">
-      <div className="border-b border-gray-100 px-6 py-5">
-        <h2 className="text-2xl font-serif font-bold text-gray-900">{name}</h2>
-        <p className="text-sm text-gray-500">Class {classLevel}</p>
+    <div className="bg-background min-h-[85vh] rounded-xl border bg-white shadow-sm flex flex-col overflow-hidden max-w-[95%] mx-auto w-full">
+      {/* Header */}
+      <div className="border-b border-border bg-gray-50/50 px-8 py-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight text-gray-900">{name}</h2>
+            <div className="flex items-center gap-2 mt-2">
+              <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
+                Class {classLevel}
+              </span>
+              <span className="text-sm text-muted-foreground text-gray-500">
+                Select a chapter to begin learning
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="flex-1 p-4 md:p-6">
+      <div className="flex-1 p-6 md:p-8 bg-gray-50/30">
         {library.loading && (
-          <div className="text-center text-gray-500">Loading chapters...</div>
+          <div className="flex items-center justify-center h-48">
+            <div className="flex flex-col items-center gap-2">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent text-blue-600"></div>
+              <p className="text-sm text-muted-foreground text-gray-500">Loading chapters...</p>
+            </div>
+          </div>
         )}
 
         {!library.loading && library.error && (
-          <div className="text-center text-red-500">{library.error}</div>
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 w-full text-center text-red-600 shadow-sm">
+            {library.error}
+          </div>
         )}
 
         {!library.loading && !library.error && !selectedChapter && (
@@ -160,21 +186,37 @@ export default function SubjectDetails() {
 
 function ChapterGrid({ chapters, onSelect }) {
   if (chapters.length === 0) {
-    return <div className="text-center text-gray-500">No chapters found.</div>;
+    return (
+      <div className="flex flex-col items-center justify-center h-48 text-gray-500 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
+        <span className="text-sm font-medium">No chapters found.</span>
+      </div>
+    );
   }
 
   return (
-    <div>
-      <h3 className="text-xl font-semibold text-gray-900 mb-6">Choose a chapter</h3>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Available Chapters</h3>
+        <span className="text-sm text-gray-500 font-medium">{chapters.length} chapters</span>
+      </div>
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {chapters.map((chapter) => (
           <button
             key={chapter.name}
             onClick={() => onSelect(chapter.name)}
-            className="text-left p-5 rounded-2xl border border-gray-200 hover:border-blue-400 hover:shadow-sm transition bg-white"
+            className="group relative flex flex-col items-start justify-between text-left p-6 rounded-xl border border-gray-200 bg-white hover:border-blue-500 hover:shadow-md hover:-translate-y-1 transition-all duration-200"
           >
-            <div className="text-sm text-gray-400">Chapter</div>
-            <div className="text-lg font-semibold text-gray-900 mt-1">{chapter.name}</div>
+            <div className="w-full">
+              <div className="inline-flex items-center rounded-md bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600 mb-3 group-hover:bg-blue-100 group-hover:text-blue-700 transition-colors">
+                Chapter
+              </div>
+              <h4 className="text-base font-semibold text-gray-900 leading-tight group-hover:text-blue-700 transition-colors">
+                {chapter.name}
+              </h4>
+            </div>
+            <div className="mt-4 flex items-center text-sm font-medium text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
+              Explore resources <span className="ml-1">→</span>
+            </div>
           </button>
         ))}
       </div>
@@ -184,37 +226,41 @@ function ChapterGrid({ chapters, onSelect }) {
 
 function SectionCards({ chapterName, onBack, onSelect, onStartMockTest }) {
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex items-center justify-between mb-8 pb-4 border-b border-gray-200">
         <div>
-          <p className="text-sm text-gray-500">Selected chapter</p>
-          <h3 className="text-xl font-semibold text-gray-900">{chapterName}</h3>
+          <div className="flex items-center gap-2 mb-1">
+            <button 
+              onClick={onBack}
+              className="text-sm text-gray-500 hover:text-gray-900 transition-colors flex items-center gap-1"
+            >
+              <span>←</span> Chapters
+            </button>
+          </div>
+          <h3 className="text-2xl font-bold text-gray-900">{chapterName}</h3>
         </div>
-        <button
-          onClick={onBack}
-          className="text-sm font-medium text-gray-600 hover:text-gray-900"
-        >
-          Back to chapters
-        </button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-3">
         <ResourceCard
-          title="NCERT PDF"
-          description="Read the official NCERT chapter"
-          icon={<FileText className="w-6 h-6 text-blue-600" />}
+          title="NCERT Textbook"
+          description="Read official chapter PDFs with AI assistance"
+          icon={<FileText className="w-6 h-6" />}
+          color="blue"
           onClick={() => onSelect("ncert")}
         />
         <ResourceCard
           title="PYQ Practice"
-          description="Previous year questions"
-          icon={<Target className="w-6 h-6 text-emerald-600" />}
+          description="Solve previous year questions step-by-step"
+          icon={<Target className="w-6 h-6" />}
+          color="emerald"
           onClick={() => onSelect("pyq")}
         />
         <ResourceCard
-          title="Mock Tests"
-          description="Chapter-wise timed test"
-          icon={<Brain className="w-6 h-6 text-purple-600" />}
+          title="Mock Test"
+          description="Take a timed exam simulation"
+          icon={<Brain className="w-6 h-6" />}
+          color="purple"
           onClick={() => onStartMockTest(chapterName)}
         />
       </div>
@@ -222,17 +268,25 @@ function SectionCards({ chapterName, onBack, onSelect, onStartMockTest }) {
   );
 }
 
-function ResourceCard({ title, description, icon, onClick }) {
+function ResourceCard({ title, description, icon, color, onClick }) {
+  const colorStyles = {
+    blue: "hover:border-blue-500 hover:ring-1 hover:ring-blue-500/20 text-blue-600 bg-blue-50 border-blue-100",
+    emerald: "hover:border-emerald-500 hover:ring-1 hover:ring-emerald-500/20 text-emerald-600 bg-emerald-50 border-emerald-100",
+    purple: "hover:border-purple-500 hover:ring-1 hover:ring-purple-500/20 text-purple-600 bg-purple-50 border-purple-100"
+  };
+
   return (
     <button
       onClick={onClick}
-      className="text-left p-6 rounded-2xl border border-gray-200 hover:border-blue-400 hover:shadow-sm transition bg-white"
+      className={`group flex flex-col justify-between text-left p-6 rounded-2xl border bg-white shadow-sm hover:shadow-md transition-all duration-200 relative overflow-hidden ${colorStyles[color].split(" ")[0]} ${colorStyles[color].split(" ")[1]}`}
     >
-      <div className="w-12 h-12 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center mb-4">
-        {icon}
+      <div className="relative z-10">
+        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-5 ${colorStyles[color].split(" ").slice(2).join(" ")} transition-colors group-hover:scale-110 duration-300`}>
+          {icon}
+        </div>
+        <h4 className="text-lg font-bold text-gray-900 mb-2">{title}</h4>
+        <p className="text-sm text-gray-500 leading-relaxed">{description}</p>
       </div>
-      <h4 className="text-lg font-semibold text-gray-900 mb-1">{title}</h4>
-      <p className="text-sm text-gray-500">{description}</p>
     </button>
   );
 }
@@ -329,91 +383,97 @@ function NcertViewer({ subject, chapter, onBack }) {
   };
 
   return (
-    <div>
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col h-full">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <p className="text-sm text-gray-500">NCERT Chapter</p>
-          <h3 className="text-xl font-semibold text-gray-900">{chapter?.name}</h3>
+          <div className="flex items-center gap-2 mb-1">
+            <button 
+              onClick={onBack}
+              className="text-sm text-gray-500 hover:text-gray-900 transition-colors flex items-center gap-1"
+            >
+              <span>←</span> Resources
+            </button>
+          </div>
+          <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+            <FileText className="w-5 h-5 text-blue-600" />
+            {chapter?.name}
+          </h3>
         </div>
-        <button
-          onClick={onBack}
-          className="text-sm font-medium text-gray-600 hover:text-gray-900"
-        >
-          Back to resources
-        </button>
       </div>
 
       {files.length === 0 ? (
-        <div className="bg-gray-100 rounded-xl h-full min-h-[520px] flex items-center justify-center border border-gray-200 text-gray-400">
-          <p className="flex items-center gap-2">
-            <FileText className="w-6 h-6" /> No NCERT PDF found for {subject}
-          </p>
+        <div className="bg-gray-50 rounded-xl h-full min-h-[520px] flex items-center justify-center border-2 border-dashed border-gray-200 text-gray-400">
+          <div className="flex flex-col items-center">
+            <FileText className="w-10 h-10 mb-3 text-gray-300" />
+            <p className="font-medium text-gray-500">No NCERT PDF found for {subject}</p>
+          </div>
         </div>
       ) : (
         <div
           ref={containerRef}
-          className="flex flex-col lg:flex-row border border-gray-200 rounded-2xl overflow-hidden w-full min-h-[640px]"
+          className="flex flex-col lg:flex-row border border-gray-200 rounded-xl overflow-hidden w-full h-[75vh] min-h-[640px] bg-white shadow-sm"
         >
-          <div className="flex-1 bg-white w-full">
-            <div className="px-4 py-3 border-b border-gray-100 text-sm text-gray-600 flex items-center justify-between">
-              <span className="font-medium text-gray-900">{chapter?.name}</span>
-              <span className="text-xs text-gray-500">{selectedFile?.name}</span>
+          <div className="flex-1 bg-gray-50/50 w-full flex flex-col">
+            <div className="px-5 py-3 border-b border-gray-200 bg-white flex items-center justify-between">
+              <div className="flex items-center gap-3 overflow-x-auto">
+                {files.map((file) => (
+                  <button
+                    key={file.name}
+                    onClick={() => setSelectedFile(file)}
+                    className={`whitespace-nowrap px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                      selectedFile?.name === file.name
+                        ? "bg-blue-100 text-blue-800"
+                        : "text-gray-600 hover:bg-gray-100"
+                    }`}
+                  >
+                    {file.name}
+                  </button>
+                ))}
+              </div>
             </div>
-            {loading && (
-              <div className="h-[520px] flex items-center justify-center text-gray-400">
-                Loading PDF...
-              </div>
-            )}
-            {!loading && error && (
-              <div className="h-[520px] flex items-center justify-center text-red-500">
-                {error}
-              </div>
-            )}
-            {!loading && !error && blobUrl && (
-              <object
-                data={blobUrl}
-                type="application/pdf"
-                className="w-full h-[640px]"
-              >
-                <div className="h-[640px] flex items-center justify-center text-gray-500 text-sm">
-                  PDF preview is not supported here. Try another browser.
+            
+            <div className="flex-1 relative">
+              {loading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+                    <p className="text-sm text-gray-500 font-medium">Loading PDF...</p>
+                  </div>
                 </div>
-              </object>
-            )}
-
-            {files.length > 1 && (
-              <div className="px-4 py-4 border-t border-gray-100">
-                <p className="text-xs font-semibold text-gray-600 mb-2">Files in this chapter</p>
-                <div className="flex flex-wrap gap-2">
-                  {files.map((file) => (
-                    <button
-                      key={file.name}
-                      onClick={() => setSelectedFile(file)}
-                      className={`px-3 py-1.5 rounded-full text-xs border ${
-                        selectedFile?.name === file.name
-                          ? "bg-blue-600 text-white border-blue-600"
-                          : "bg-white text-gray-700 border-gray-200 hover:border-blue-300"
-                      }`}
-                    >
-                      {file.name}
-                    </button>
-                  ))}
+              )}
+              {!loading && error && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
+                  <div className="bg-red-50 text-red-600 border border-red-200 px-4 py-3 rounded-lg shadow-sm flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5" />
+                    <span>{error}</span>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+              {!loading && !error && blobUrl && (
+                <object
+                  data={blobUrl}
+                  type="application/pdf"
+                  className="absolute inset-0 w-full h-full"
+                >
+                  <div className="flex items-center justify-center h-full text-gray-500 text-sm bg-gray-50">
+                    PDF preview is not supported here. Try downloading it or use another browser.
+                  </div>
+                </object>
+              )}
+            </div>
           </div>
 
           <div
             onMouseDown={handleDrag}
-            className="hidden lg:flex w-2 cursor-col-resize items-center justify-center bg-white"
+            className="hidden lg:flex w-2 cursor-col-resize items-center justify-center bg-gray-100 hover:bg-gray-200 transition-colors border-x border-gray-200 z-10"
           >
-            <div className="h-10 w-0.5 bg-gray-300 rounded-full" />
+            <div className="h-8 w-0.5 bg-gray-400 rounded-full" />
           </div>
 
-          <div style={{ width: rightWidth }} className="w-full lg:w-auto border-l border-gray-100">
+          <div style={{ width: rightWidth }} className="w-full lg:w-auto h-full hidden lg:block">
             <AIAssistant
               context={`I am reading the NCERT chapter ${chapter?.name} for ${subject}.`}
-              containerClass="h-full"
+              containerClass="h-full border-0 rounded-none w-full"
               bodyClass="flex-1"
             />
           </div>
@@ -610,162 +670,225 @@ function PyqQuiz({ subject, chapterName, classLevel, onBack, isMockTest = false 
   };
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col h-full">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 pb-4 border-b border-gray-200">
         <div>
-          <p className="text-sm text-gray-500">{isMockTest ? "Mock Test" : "PYQ Practice"}</p>
-          <h3 className="text-xl font-semibold text-gray-900">{chapterName}</h3>
-        </div>
-        <div className="flex items-center gap-6">
-          <div className="text-sm text-gray-600">
-            {isMockTest ? (
-              <>Time Left: <span className="font-semibold text-red-600">{formatTime(mockTestSeconds)}</span></>
-            ) : (
-              <>Time: <span className="font-semibold text-gray-900">{formatTime(totalSeconds)}</span></>
-            )}
+          <div className="flex items-center gap-2 mb-1">
+            <button 
+              onClick={onBack}
+              className="text-sm text-gray-500 hover:text-gray-900 transition-colors flex items-center gap-1"
+            >
+              <span>←</span> Resources
+            </button>
           </div>
-          <button
-            onClick={onBack}
-            className="text-sm font-medium text-gray-600 hover:text-gray-900"
-          >
-            Back to resources
-          </button>
+          <h3 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            {isMockTest ? <Brain className="w-6 h-6 text-purple-600" /> : <Target className="w-6 h-6 text-emerald-600" />}
+            {chapterName}
+            <span className="ml-2 inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
+              {isMockTest ? "Mock Test" : "PYQ Practice"}
+            </span>
+          </h3>
+        </div>
+        <div className="mt-4 md:mt-0 flex items-center gap-4 bg-white border border-gray-200 px-4 py-2 rounded-lg shadow-sm">
+          <div className="flex items-center gap-2">
+            <Clock className={`w-4 h-4 ${isMockTest ? 'text-red-500' : 'text-blue-500'}`} />
+            <span className={`text-sm font-semibold tracking-wide ${isMockTest ? 'text-red-600' : 'text-gray-900'}`}>
+              {formatTime(isMockTest ? mockTestSeconds : totalSeconds)}
+            </span>
+          </div>
         </div>
       </div>
 
-      {loading && <div className="text-gray-500">Loading questions...</div>}
-      {!loading && error && <div className="text-red-500">{error}</div>}
+      {loading && (
+        <div className="flex justify-center items-center h-64">
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+            <p className="text-sm text-gray-500 font-medium">Loading questions...</p>
+          </div>
+        </div>
+      )}
+      {!loading && error && (
+        <div className="bg-red-50 text-red-600 border border-red-200 p-4 rounded-xl flex items-center justify-center gap-2">
+          <AlertTriangle className="w-5 h-5" />
+          <span className="font-medium">{error}</span>
+        </div>
+      )}
 
       {!loading && !error && (
-        <div ref={containerRef} className="flex flex-col lg:flex-row border border-gray-200 rounded-2xl overflow-hidden w-full">
-          <div className="flex-1 bg-white p-6 space-y-6">
+        <div ref={containerRef} className="flex flex-col lg:flex-row border border-gray-200 rounded-xl overflow-hidden w-full bg-white shadow-sm flex-1">
+          <div className="flex-1 bg-white p-6 md:p-8 space-y-6 flex flex-col relative">
             {questions.length === 0 && (
-                <div className="space-y-3">
-                  <div className="text-gray-500">No questions found for this chapter.</div>
+                <div className="flex flex-col items-center justify-center p-12 text-center rounded-xl bg-gray-50 border-2 border-dashed border-gray-200 flex-1">
+                  <Target className="w-12 h-12 text-gray-300 mb-4" />
+                  <h4 className="text-lg font-medium text-gray-900 mb-1">No questions found</h4>
+                  <p className="text-sm text-gray-500 mb-6">There are no practice questions available for this chapter yet.</p>
+                  
                   {resourceFiles.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-sm font-semibold text-gray-700">Cloudinary files</p>
-                      {resourceFiles.map((file) => (
-                        <a
-                          key={file.url}
-                          href={file.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block rounded-lg border border-gray-200 px-4 py-3 text-sm text-blue-700 hover:border-blue-400 hover:bg-blue-50"
-                        >
-                          {file.name}
-                        </a>
-                      ))}
+                    <div className="w-full max-w-md text-left bg-white p-4 rounded-lg border border-gray-200 shadow-sm mt-4">
+                      <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-blue-500" />
+                        Available reference files
+                      </p>
+                      <div className="space-y-2">
+                        {resourceFiles.map((file) => (
+                          <a
+                            key={file.url}
+                            href={file.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center justify-between rounded-md border border-gray-100 bg-gray-50 px-3 py-2 text-sm text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-colors"
+                          >
+                            <span className="truncate">{file.name}</span>
+                            <span>→</span>
+                          </a>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
             )}
             {questions.length > 0 && activeIndex !== null && (
-              <div className="border rounded-xl p-5 border-blue-200 bg-blue-50/30">
-                <div className="flex items-start justify-between gap-4 mb-3">
-                  <p className="font-medium text-gray-900 whitespace-pre-wrap">
-                    {questions[activeIndex].question || questions[activeIndex].text}
-                  </p>
-                  {!isMockTest && (
-                    <div className="text-xs text-gray-500 whitespace-nowrap">
-                      Time: {formatTime(perQuestionSeconds[activeIndex] || 0)}
+              <div className="flex-1">
+                <div className="mb-4 flex items-center justify-between h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-blue-500 transition-all duration-300"
+                    style={{ width: `${((activeIndex + 1) / questions.length) * 100}%` }}
+                  ></div>
+                </div>
+                
+                <div className="border border-gray-200 rounded-xl p-6 md:p-8 bg-gray-50/50 shadow-sm">
+                  <div className="flex items-start justify-between gap-4 mb-6">
+                    <h4 className="text-lg md:text-xl font-medium text-gray-900 leading-relaxed whitespace-pre-wrap flex-1">
+                      <span className="text-blue-600 font-bold mr-2 text-base md:text-lg">Q{activeIndex + 1}.</span>
+                      {questions[activeIndex].question || questions[activeIndex].text}
+                    </h4>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2 mt-6">
+                    {questions[activeIndex].options.map((opt) => {
+                      const selected = answers[activeIndex] === opt;
+                      const isCorrect =
+                        getAnswerKey(questions[activeIndex].answer) === getOptionKey(opt);
+                      const showState = showResults;
+                      
+                      let optionClasses = "border-gray-200 bg-white hover:border-blue-400 hover:bg-blue-50 text-gray-700";
+                      
+                      if (selected && !showState) {
+                        optionClasses = "border-blue-500 bg-blue-50 text-blue-800 ring-1 ring-blue-500";
+                      } else if (showState) {
+                        if (isCorrect) {
+                          optionClasses = "border-emerald-500 bg-emerald-50 text-emerald-800 ring-1 ring-emerald-500";
+                        } else if (selected && !isCorrect) {
+                          optionClasses = "border-red-500 bg-red-50 text-red-800 ring-1 ring-red-500";
+                        } else {
+                          optionClasses = "border-gray-200 bg-white text-gray-500 opacity-60";
+                        }
+                      }
+
+                      return (
+                        <button
+                          key={opt}
+                          onClick={() => !showResults && setAnswers((prev) => ({ ...prev, [activeIndex]: opt }))}
+                          disabled={showResults}
+                          className={`text-left px-5 py-4 rounded-xl border text-sm transition-all duration-200 font-medium ${optionClasses}`}
+                        >
+                          {opt}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {questions[activeIndex].images?.length > 0 && (
+                    <div className="mt-6 space-y-4">
+                      {questions[activeIndex].images.map((img) => (
+                        <div key={img} className="rounded-xl overflow-hidden border border-gray-200 bg-white p-2">
+                          <img
+                            src={buildAssetUrl(img)}
+                            alt="Question figure"
+                            className="max-w-full mx-auto"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {questions[activeIndex].tables?.length > 0 && (
+                    <div className="mt-6 space-y-4">
+                      {questions[activeIndex].tables.map((table, tableIndex) => (
+                        <div key={`table-${tableIndex}`} className="overflow-x-auto border border-gray-200 rounded-lg bg-white">
+                          <table className="min-w-full text-sm">
+                            <tbody>
+                              {table.map((row, rowIndex) => (
+                                <tr key={`row-${rowIndex}`} className={rowIndex === 0 ? "bg-gray-100 font-semibold" : "border-t border-gray-100"}>
+                                  {row.map((cell, cellIndex) => (
+                                    <td
+                                      key={`cell-${rowIndex}-${cellIndex}`}
+                                      className="px-4 py-3 text-gray-700"
+                                    >
+                                      {cell}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {(showResults && questions[activeIndex].solution || showResults && questions[activeIndex].explanation) && (
+                    <div className="mt-6 p-4 bg-blue-50 border border-blue-100 rounded-lg text-sm text-blue-900">
+                      <div className="font-semibold text-blue-800 mb-1 flex items-center gap-1">
+                        <FileText className="w-4 h-4" /> Solution Explanation
+                      </div>
+                      <div className="leading-relaxed">
+                        {questions[activeIndex].solution || questions[activeIndex].explanation}
+                      </div>
                     </div>
                   )}
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {questions[activeIndex].options.map((opt) => {
-                    const selected = answers[activeIndex] === opt;
-                    const isCorrect =
-                      getAnswerKey(questions[activeIndex].answer) === getOptionKey(opt);
-                    const showState = showResults && selected;
-                    return (
-                      <button
-                        key={opt}
-                        onClick={() => setAnswers((prev) => ({ ...prev, [activeIndex]: opt }))}
-                        className={`text-left px-4 py-2 rounded-lg border text-sm transition ${
-                          selected ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-blue-300"
-                        } ${showState && isCorrect ? "bg-emerald-50 border-emerald-400" : ""} ${showState && !isCorrect ? "bg-red-50 border-red-400" : ""}`}
-                      >
-                        {opt}
-                      </button>
-                    );
-                  })}
-                </div>
-                {questions[activeIndex].images?.length > 0 && (
-                  <div className="mt-4 space-y-3">
-                    {questions[activeIndex].images.map((img) => (
-                      <img
-                        key={img}
-                        src={buildAssetUrl(img)}
-                        alt="Question figure"
-                        className="max-w-full rounded-lg border border-gray-200"
-                      />
-                    ))}
-                  </div>
-                )}
-                {questions[activeIndex].tables?.length > 0 && (
-                  <div className="mt-4 space-y-4">
-                    {questions[activeIndex].tables.map((table, tableIndex) => (
-                      <div key={`table-${tableIndex}`} className="overflow-x-auto border border-gray-200 rounded-lg">
-                        <table className="min-w-full text-sm">
-                          <tbody>
-                            {table.map((row, rowIndex) => (
-                              <tr key={`row-${rowIndex}`} className={rowIndex === 0 ? "bg-gray-50" : ""}>
-                                {row.map((cell, cellIndex) => (
-                                  <td
-                                    key={`cell-${rowIndex}-${cellIndex}`}
-                                    className="border border-gray-200 px-3 py-2 text-gray-700"
-                                  >
-                                    {cell}
-                                  </td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {(showResults && questions[activeIndex].solution || showResults && questions[activeIndex].explanation) && (
-                  <div className="mt-3 text-sm text-gray-600">
-                    <span className="font-semibold">Solution: </span>{questions[activeIndex].solution || questions[activeIndex].explanation}
-                  </div>
-                )}
               </div>
             )}
 
             {questions.length > 0 && activeIndex !== null && (
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between border-t border-gray-100 pt-6 mt-6">
                 <button
                   onClick={() => setActiveIndex((prev) => Math.max(0, (prev ?? 0) - 1))}
                   disabled={activeIndex === 0}
-                  className="px-3 py-2 rounded-lg border text-sm text-gray-600 disabled:opacity-50"
+                  className="px-4 py-2.5 rounded-lg border border-gray-200 font-medium text-sm text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-gray-200 disabled:opacity-50 disabled:pointer-events-none transition-colors"
                 >
-                  Previous
+                  ← Previous
                 </button>
-                <div className="text-sm text-gray-600">
-                  Question {activeIndex + 1} of {questions.length}
+                <div className="text-sm font-medium text-gray-500">
+                  {activeIndex + 1} / {questions.length}
                 </div>
                 <button
                   onClick={() => setActiveIndex((prev) => Math.min(questions.length - 1, (prev ?? 0) + 1))}
                   disabled={activeIndex === questions.length - 1}
-                  className="px-3 py-2 rounded-lg border text-sm text-gray-600 disabled:opacity-50"
+                  className="px-4 py-2.5 rounded-lg border border-gray-200 font-medium text-sm text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-gray-200 disabled:opacity-50 disabled:pointer-events-none transition-colors"
                 >
-                  Next
+                  Next →
                 </button>
               </div>
             )}
 
             {questions.length > 0 && (
-              <div className="flex items-center justify-between pt-2">
-                <button
-                  onClick={() => setShowResults(true)}
-                  className="px-4 py-2 rounded-lg bg-gray-900 text-white text-sm hover:bg-black"
-                >
-                  Submit answers
-                </button>
-                <p className="text-sm text-gray-600">Score: {showResults ? `${score}/${questions.length}` : "-"}</p>
+              <div className="flex items-center justify-center pt-4">
+                {!showResults ? (
+                  <button
+                    onClick={() => setShowResults(true)}
+                    className="w-full md:w-auto px-8 py-3 rounded-xl bg-gray-900 text-white font-medium shadow hover:bg-gray-800 transition-colors focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
+                  >
+                    Submit Test
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-4 bg-emerald-50 border border-emerald-200 text-emerald-800 px-6 py-3 rounded-xl">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-200 text-emerald-700 font-bold">
+                      ✓
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold">Test Completed</div>
+                      <div className="text-lg font-bold">Score: {score} / {questions.length}</div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -774,13 +897,13 @@ function PyqQuiz({ subject, chapterName, classLevel, onBack, isMockTest = false 
             <>
               <div
                 onMouseDown={handleDrag}
-                className="hidden lg:flex w-2 cursor-col-resize items-center justify-center bg-white"
+                className="hidden lg:flex w-2 cursor-col-resize items-center justify-center bg-gray-100 hover:bg-gray-200 transition-colors border-x border-gray-200 z-10"
               >
-                <div className="h-10 w-0.5 bg-gray-300 rounded-full" />
+                <div className="h-8 w-0.5 bg-gray-400 rounded-full" />
               </div>
 
-              <div style={{ width: rightWidth }} className="w-full lg:w-auto border-l border-gray-100">
-                <AIAssistant context={`I am practicing PYQ questions for ${chapterName}.`} containerClass="h-full" bodyClass="flex-1" />
+              <div style={{ width: rightWidth }} className="w-full lg:w-auto h-full hidden lg:block border-l border-gray-200">
+                <AIAssistant context={`I am practicing PYQ questions for ${chapterName}. Active question: ${questions[activeIndex]?.question?.substring(0, 100)}...`} containerClass="h-full border-0 rounded-none w-full" bodyClass="flex-1" />
               </div>
             </>
           )}
@@ -845,44 +968,59 @@ function AIAssistant({ context, containerClass = "", bodyClass = "" }) {
   };
 
   return (
-    <div className={`w-full md:w-80 bg-white flex flex-col border-l border-gray-100 flex-shrink-0 ${containerClass}`}>
-      <div className="p-4 border-b border-gray-100 bg-blue-50/50 flex items-center gap-2">
-        <MessageSquare className="w-5 h-5 text-blue-600" />
-        <h3 className="font-semibold text-gray-900">AI Tutor</h3>
+    <div className={`w-full md:w-80 bg-white flex flex-col flex-shrink-0 bg-gray-50/30 ${containerClass}`}>
+      <div className="p-4 border-b border-gray-200 bg-white flex items-center gap-3">
+        <div className="bg-blue-100 p-2 rounded-lg">
+          <MessageSquare className="w-4 h-4 text-blue-600" />
+        </div>
+        <div>
+          <h3 className="font-bold text-gray-900 text-sm">AI Tutor</h3>
+          <p className="text-xs text-gray-500 font-medium">Ready to help</p>
+        </div>
       </div>
       
-      <div className={`flex-1 p-4 overflow-y-auto space-y-4 ${bodyClass}`}>
+      <div className={`flex-1 p-4 overflow-y-auto space-y-4 bg-gray-50/50 ${bodyClass}`}>
         {messages.map((m, i) => (
           <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[85%] p-3 rounded-2xl text-sm ${m.role === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-gray-100 text-gray-800 rounded-bl-none'}`}>
+            {m.role === 'model' && (
+               <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center mr-2 flex-shrink-0 self-end mb-1">
+                 <Brain className="w-3 h-3 text-blue-600" />
+               </div>
+            )}
+            <div className={`max-w-[75%] p-3.5 rounded-2xl text-sm leading-relaxed shadow-sm ${m.role === 'user' ? 'bg-gray-900 text-white rounded-br-sm' : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm'}`}>
               {m.text}
             </div>
           </div>
         ))}
         {loading && (
           <div className="flex justify-start">
-            <div className="bg-gray-100 text-gray-800 p-3 rounded-2xl rounded-bl-none text-sm animate-pulse">
-              Thinking...
+             <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center mr-2 flex-shrink-0 self-end mb-1">
+               <Brain className="w-3 h-3 text-blue-600" />
+             </div>
+            <div className="bg-white border border-gray-200 text-gray-500 p-3.5 rounded-2xl rounded-bl-sm text-sm shadow-sm flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
             </div>
           </div>
         )}
         <div ref={endOfMsgRef} />
       </div>
 
-      <div className="p-4 border-t border-gray-100">
-        <div className="relative">
+      <div className="p-4 border-t border-gray-200 bg-white">
+        <div className="relative flex items-center">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="Ask a question..."
-            className="w-full pl-4 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="Ask about this chapter..."
+            className="w-full pl-4 pr-12 py-3 bg-gray-100 border-transparent rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all shadow-inner"
           />
           <button 
             onClick={handleSend}
             disabled={loading || !input.trim()}
-            className="absolute right-2 top-2 p-1.5 bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:opacity-50 transition"
+            className="absolute right-1.5 p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 transition shadow-sm"
           >
             <Send className="w-4 h-4" />
           </button>

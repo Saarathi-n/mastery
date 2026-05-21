@@ -215,7 +215,9 @@ const userSchema = new mongoose.Schema({
   grade: String,
   stream: String,
   currentLevel: String,
-  diagnosticTestCleared: { type: Boolean, default: false }
+  diagnosticTestCleared: { type: Boolean, default: false },
+  screeningTestTaken: { type: Boolean, default: false },
+  screeningTestScore: { type: Number, default: 0 }
 });
 
 const questionSchema = new mongoose.Schema({
@@ -370,7 +372,9 @@ async function startServer() {
           grade: user.grade,
           stream: user.stream,
           currentLevel: user.currentLevel,
-          diagnosticTestCleared: user.diagnosticTestCleared
+          diagnosticTestCleared: user.diagnosticTestCleared,
+          screeningTestTaken: user.screeningTestTaken,
+          screeningTestScore: user.screeningTestScore
         }
       });
     } catch (err) {
@@ -403,11 +407,100 @@ async function startServer() {
 
   app.put("/api/user/:id/diagnostic", authenticate, async (req, res) => {
     try {
+      const { passed, nextLevel, score } = req.body;
+      const user = await User.findById(req.params.id);
+      if (!user) return res.status(404).json({ error: "Not found" });
+
+      user.diagnosticTestCleared = true;
+      user.currentLevel = nextLevel;
+      // Add score tracking if needed later
+      await user.save();
+      res.json({ success: true, nextLevel });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/questions", authenticateFlexible, async (req, res) => {
+    try {
+      const { type, exam } = req.query;
+      let query = {};
+      if (type) query.type = type;
+      if (exam && exam !== 'Both') query.exam = exam;
+      
+      let questions = await Question.find(query);
+      
+      // Shuffle within subjects, keep subjects separate
+      if (type === 'diagnostic') {
+        const grouped = { Physics: [], Chemistry: [], Mathematics: [], Biology: [] };
+        questions.forEach(q => {
+          if (grouped[q.subject]) grouped[q.subject].push(q);
+          else { grouped[q.subject] = [q]; }
+        });
+        
+        let shuffled = [];
+        for (const subj of ['Physics', 'Chemistry', 'Mathematics', 'Biology']) {
+          if(!grouped[subj]) continue;
+          // Shuffle array
+          for (let i = grouped[subj].length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [grouped[subj][i], grouped[subj][j]] = [grouped[subj][j], grouped[subj][i]];
+          }
+          shuffled.push(...grouped[subj]);
+        }
+        
+        // Include any that didn't match those 4 subjects
+        for(let q of questions) {
+            if(!['Physics', 'Chemistry', 'Mathematics', 'Biology'].includes(q.subject)) {
+                 shuffled.push(q);
+             }
+        }
+        return res.json(shuffled);
+      }
+      
+      res.json(questions);
+    } catch (err) {
+      res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  app.put("/api/user/:id/diagnostic", authenticate, async (req, res) => {
+    try {
       const { passed, nextLevel } = req.body;
       await User.findByIdAndUpdate(req.params.id, { diagnosticTestCleared: !!passed, currentLevel: nextLevel });
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  app.put("/api/user/:id/screening", authenticate, async (req, res) => {
+    try {
+      const { score, stream } = req.body;
+      const user = await User.findById(req.params.id);
+      if (!user) return res.status(404).json({ error: "User not found" });
+      
+      user.screeningTestTaken = true;
+      user.screeningTestScore = score;
+
+      const isNEET = stream === "NEET";
+      const isJEE = stream === "JEE";
+      
+      let nextLevel = "11th";
+      if (isNEET && score >= 55) {
+        nextLevel = "12th";
+      } else if (isJEE && score >= 15) {
+        nextLevel = "12th";
+      } else if (score >= 35) { // Both
+        nextLevel = "12th";
+      }
+
+      user.currentLevel = nextLevel;
+      await user.save();
+      
+      res.json({ success: true, nextLevel, score });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
     }
   });
 
@@ -424,6 +517,53 @@ async function startServer() {
       res.json(questions.map((q) => ({ ...q.toObject(), id: q._id })));
     } catch (err) {
       res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  app.get("/api/screentest/questions", authenticateFlexible, async (req, res) => {
+    try {
+      const { exam } = req.query;
+      let folder;
+      
+      if (exam === 'NEET') {
+        folder = 'mastery/neet-screentest';
+      } else if (exam === 'JEE') {
+        folder = 'mastery/screentest';
+      } else {
+        return res.status(400).json({ error: "Invalid exam type" });
+      }
+
+      const resources = await searchCloudinaryRawResources(folder);
+      
+      const questions = [];
+      for (const resource of resources) {
+        if (resource.filename?.toLowerCase().endsWith('.json')) {
+          try {
+            const url = cloudinary.utils.private_download_url(
+              resource.public_id, 
+              'json', 
+              { resource_type: 'raw' }
+            );
+            
+            const response = await fetch(url);
+            if (response.ok) {
+              const data = await response.json();
+              if (Array.isArray(data)) {
+                questions.push(...data);
+              } else if (data.questions) {
+                questions.push(...data.questions);
+              }
+            }
+          } catch (err) {
+            console.error('Error parsing JSON from Cloudinary:', err);
+          }
+        }
+      }
+
+      res.json(questions);
+    } catch (err) {
+      console.error('Error in screentest questions:', err);
+      res.status(500).json({ error: err.message });
     }
   });
 
