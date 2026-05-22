@@ -1202,29 +1202,32 @@ function AIAssistant({ context, containerClass = "", bodyClass = "" }) {
   };
 
   return (
-    <div className={`w-full md:w-80 bg-white flex flex-col flex-shrink-0 bg-gray-50/30 ${containerClass}`}>
-      <div className="p-4 border-b border-gray-200 bg-white flex items-center gap-3">
-        <div className="bg-blue-100 p-2 rounded-lg">
-          <MessageSquare className="w-4 h-4 text-blue-600" />
+    <div className={`w-full flex flex-col bg-gradient-to-b from-purple-50/95 via-violet-50/90 to-fuchsia-50/95 backdrop-blur-md border-l border-purple-100/40 shadow-inner h-full ${containerClass}`}>
+      <div className="p-4 border-b border-purple-100/80 bg-white/40 backdrop-blur-sm flex items-center gap-3">
+        <div className="bg-purple-600 p-2 rounded-lg text-white shadow-md shadow-purple-500/20">
+          <MessageSquare className="w-4 h-4" />
         </div>
         <div>
-          <h3 className="font-bold text-gray-900 text-sm">AI Tutor</h3>
-          <p className="text-xs text-gray-500 font-medium">Ready to help</p>
+          <h3 className="font-bold text-purple-950 text-sm">AI Tutor</h3>
+          <p className="text-xs text-purple-600/70 font-semibold flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+            Online & Ready
+          </p>
         </div>
       </div>
       
-      <div className={`flex-1 p-4 overflow-y-auto space-y-4 bg-gray-50/50 ${bodyClass}`}>
+      <div className={`flex-1 p-4 overflow-y-auto space-y-4 bg-transparent ${bodyClass}`}>
         {messages.map((m, i) => (
           <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             {m.role === 'model' && (
-               <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center mr-2 flex-shrink-0 self-end mb-1">
-                 <Brain className="w-3 h-3 text-blue-600" />
+               <div className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center mr-2 flex-shrink-0 self-end mb-1">
+                 <Brain className="w-3 h-3 text-purple-600" />
                </div>
             )}
             <div className={`max-w-[85%] p-3.5 rounded-2xl text-sm leading-relaxed shadow-sm ${
               m.role === 'user' 
-                ? 'bg-gray-900 text-white rounded-br-sm' 
-                : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm w-full'
+                ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-br-sm font-medium' 
+                : 'bg-white/85 backdrop-blur-sm border border-purple-100/80 text-gray-800 rounded-bl-sm w-full'
             }`}>
               {m.role === 'user' ? (
                 <div className="whitespace-pre-wrap">{m.text}</div>
@@ -1236,13 +1239,13 @@ function AIAssistant({ context, containerClass = "", bodyClass = "" }) {
         ))}
         {loading && (
           <div className="flex justify-start">
-             <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center mr-2 flex-shrink-0 self-end mb-1">
-               <Brain className="w-3 h-3 text-blue-600" />
+             <div className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center mr-2 flex-shrink-0 self-end mb-1">
+               <Brain className="w-3 h-3 text-purple-600" />
              </div>
-            <div className="bg-white border border-gray-200 text-gray-500 p-3.5 rounded-2xl rounded-bl-sm text-sm shadow-sm flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-              <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-              <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            <div className="bg-white/85 backdrop-blur-sm border border-purple-100/85 text-purple-500 p-3.5 rounded-2xl rounded-bl-sm text-sm shadow-sm flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
             </div>
           </div>
         )}
@@ -1251,21 +1254,21 @@ function AIAssistant({ context, containerClass = "", bodyClass = "" }) {
 
       {/* Prompt Chips */}
       {!loading && (
-        <div className="px-4 py-2 bg-white border-t border-gray-100 flex gap-1.5 overflow-x-auto no-scrollbar scroll-smooth">
+        <div className="px-4 py-2.5 bg-white/35 backdrop-blur-sm border-t border-purple-100/40 flex gap-1.5 overflow-x-auto no-scrollbar scroll-smooth">
           {promptChips.map((chip, idx) => (
             <button
               key={idx}
               onClick={() => handleSend(chip.query)}
-              className="flex-shrink-0 flex items-center gap-1 text-[11px] py-1 px-2.5 bg-gray-50 border border-gray-200 text-gray-600 rounded-full hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 transition-all font-medium cursor-pointer shadow-sm"
+              className="flex-shrink-0 flex items-center gap-1.5 text-[11px] py-1.5 px-3 bg-white/80 border border-purple-200/50 text-purple-800 rounded-full hover:bg-gradient-to-r hover:from-purple-600 hover:to-indigo-600 hover:text-white hover:border-transparent transition-all font-semibold cursor-pointer shadow-sm"
             >
-              <Sparkles className="w-3 h-3 text-blue-500" />
+              <Sparkles className="w-3 h-3 text-purple-500" />
               {chip.label}
             </button>
           ))}
         </div>
       )}
 
-      <div className="p-4 border-t border-gray-200 bg-white">
+      <div className="p-4 border-t border-purple-100/60 bg-white/40 backdrop-blur-sm">
         <div className="relative flex items-center">
           <input
             type="text"
@@ -1273,12 +1276,12 @@ function AIAssistant({ context, containerClass = "", bodyClass = "" }) {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder="Ask about this chapter..."
-            className="w-full pl-4 pr-12 py-3 bg-gray-100 border-transparent rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all shadow-inner"
+            className="w-full pl-4 pr-12 py-3 bg-white/80 border border-purple-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white transition-all shadow-sm"
           />
           <button 
             onClick={() => handleSend()}
             disabled={loading || !input.trim()}
-            className="absolute right-1.5 p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 transition shadow-sm"
+            className="absolute right-1.5 p-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:from-gray-300 disabled:to-gray-300 transition shadow-md shadow-purple-500/10 cursor-pointer"
           >
             <Send className="w-4 h-4" />
           </button>
