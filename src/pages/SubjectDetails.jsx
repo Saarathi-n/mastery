@@ -1,6 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { FileText, Brain, Target, MessageSquare, Send, Clock, AlertTriangle } from "lucide-react";
+import { FileText, Brain, Target, MessageSquare, Send, Clock, AlertTriangle, Copy, Check, Volume2, VolumeX, Sparkles } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 
 export default function SubjectDetails() {
   const { name } = useParams();
@@ -972,6 +977,161 @@ function PyqQuiz({ subject, chapterName, classLevel, onBack, isMockTest = false 
   );
 }
 
+function ModelMessageBubble({ text }) {
+  const [copied, setCopied] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const synthRef = useRef(null);
+  const utteranceRef = useRef(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      synthRef.current = window.speechSynthesis;
+    }
+    return () => {
+      if (synthRef.current) {
+        synthRef.current.cancel();
+      }
+    };
+  }, []);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy text:", err);
+    }
+  };
+
+  const handleSpeak = () => {
+    if (!synthRef.current) return;
+
+    if (speaking) {
+      synthRef.current.cancel();
+      setSpeaking(false);
+      return;
+    }
+
+    // Clean text of markdown and LaTeX characters before speaking to make it sound natural
+    const cleanText = text
+      .replace(/[*#`_\-\[\]()]/g, "") // remove markdown styling characters
+      .replace(/\$\$[\s\S]*?\$\$/g, " [equation] ") // simplify block equations
+      .replace(/\$[\s\S]*?\$/g, " [value] ") // simplify inline equations
+      .replace(/\\Delta/g, "change in")
+      .replace(/\\theta/g, "theta")
+      .replace(/\\pi/g, "pi")
+      .replace(/\\infty/g, "infinity");
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utteranceRef.current = utterance;
+
+    utterance.onend = () => {
+      setSpeaking(false);
+    };
+
+    utterance.onerror = () => {
+      setSpeaking(false);
+    };
+
+    setSpeaking(true);
+    synthRef.current.speak(utterance);
+  };
+
+  return (
+    <div className="flex flex-col w-full overflow-hidden">
+      <div className="ai-tutor-markdown">
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm, remarkMath]}
+          rehypePlugins={[rehypeKatex]}
+          components={{
+            h1: ({ node, ...props }) => <h1 className="text-base font-bold text-gray-900 mt-3 mb-1.5 first:mt-0" {...props} />,
+            h2: ({ node, ...props }) => <h2 className="text-sm font-bold text-gray-800 mt-2.5 mb-1 first:mt-0" {...props} />,
+            h3: ({ node, ...props }) => <h3 className="text-xs font-bold text-gray-800 mt-2 mb-1 first:mt-0" {...props} />,
+            p: ({ node, ...props }) => <p className="mb-2 last:mb-0 leading-relaxed" {...props} />,
+            ul: ({ node, ...props }) => <ul className="list-disc pl-4 mb-2.5 space-y-1" {...props} />,
+            ol: ({ node, ...props }) => <ol className="list-decimal pl-4 mb-2.5 space-y-1" {...props} />,
+            li: ({ node, ...props }) => <li className="mb-0.5 text-gray-700" {...props} />,
+            a: ({ node, ...props }) => <a className="text-blue-600 hover:underline font-medium break-all" target="_blank" rel="noopener noreferrer" {...props} />,
+            blockquote: ({ node, ...props }) => <blockquote className="border-l-4 border-blue-500 pl-3 italic my-2 bg-blue-50/50 py-1.5 pr-2 rounded-r-md text-gray-600" {...props} />,
+            table: ({ node, ...props }) => (
+              <div className="overflow-x-auto my-2.5 border border-gray-200 rounded-lg">
+                <table className="min-w-full divide-y divide-gray-200" {...props} />
+              </div>
+            ),
+            th: ({ node, ...props }) => <th className="px-3 py-1.5 bg-gray-50 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider" {...props} />,
+            td: ({ node, ...props }) => <td className="px-3 py-1.5 text-xs text-gray-600 border-t border-gray-100" {...props} />,
+            code: ({ node, className, children, ...props }) => {
+              const match = /language-(\w+)/.exec(className || "");
+              const content = String(children).replace(/\n$/, "");
+              const hasNewlines = content.includes("\n");
+              if (hasNewlines || match) {
+                return (
+                  <pre className="overflow-x-auto bg-gray-900 text-gray-50 p-3 rounded-lg text-xs my-2 font-mono leading-normal">
+                    <code className={className} {...props}>
+                      {children}
+                    </code>
+                  </pre>
+                );
+              }
+              return (
+                <code className="bg-gray-100 text-rose-600 px-1.5 py-0.5 rounded text-xs font-mono font-medium" {...props}>
+                  {children}
+                </code>
+              );
+            }
+          }}
+        >
+          {text}
+        </ReactMarkdown>
+      </div>
+
+      {/* Action Toolbar */}
+      <div className="flex items-center gap-3 mt-3 pt-2.5 border-t border-gray-100 text-gray-400">
+        <button
+          onClick={handleCopy}
+          className="flex items-center gap-1.5 text-xs hover:text-gray-600 transition-colors py-1 px-2 rounded-md hover:bg-gray-50 border border-transparent hover:border-gray-100 cursor-pointer"
+          title="Copy response"
+        >
+          {copied ? (
+            <>
+              <Check className="w-3.5 h-3.5 text-emerald-500" />
+              <span className="text-emerald-600 font-medium">Copied!</span>
+            </>
+          ) : (
+            <>
+              <Copy className="w-3.5 h-3.5" />
+              <span>Copy</span>
+            </>
+          )}
+        </button>
+
+        <button
+          onClick={handleSpeak}
+          className={`flex items-center gap-1.5 text-xs transition-colors py-1 px-2 rounded-md border cursor-pointer ${
+            speaking
+              ? "text-blue-600 hover:text-blue-700 bg-blue-50 border-blue-100 hover:bg-blue-100"
+              : "hover:text-gray-600 hover:bg-gray-50 border-transparent hover:border-gray-100"
+          }`}
+          title={speaking ? "Stop speaking" : "Speak response"}
+        >
+          {speaking ? (
+            <>
+              <VolumeX className="w-3.5 h-3.5 text-blue-600 animate-pulse" />
+              <span className="font-semibold text-blue-600">Stop Voice</span>
+            </>
+          ) : (
+            <>
+              <Volume2 className="w-3.5 h-3.5" />
+              <span>Hear Answer</span>
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AIAssistant({ context, containerClass = "", bodyClass = "" }) {
   const [messages, setMessages] = useState([
     { role: "model", text: "Hi! Ask me to explain a concept or why your answer was wrong." }
@@ -980,18 +1140,27 @@ function AIAssistant({ context, containerClass = "", bodyClass = "" }) {
   const [loading, setLoading] = useState(false);
   const endOfMsgRef = useRef(null);
 
+  const promptChips = [
+    { label: "💡 Explain concept", query: "Can you explain the main concept or theory behind this question?" },
+    { label: "📝 Solve step-by-step", query: "Please walk me through the step-by-step derivation/solution for this question." },
+    { label: "🔬 Give practice MCQ", query: "Can you provide a similar practice MCQ question for me to solve?" }
+  ];
+
   useEffect(() => {
     endOfMsgRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSend = async () => {
-    if (!input.trim() || loading) return;
+  const handleSend = async (overrideText = null) => {
+    const textToSend = overrideText || input;
+    if (!textToSend.trim() || loading) return;
 
-    const userMsg = input.trim();
+    const userMsg = textToSend.trim();
     const currentMessages = [...messages, { role: "user", text: userMsg }];
 
     setMessages(currentMessages);
-    setInput("");
+    if (!overrideText) {
+      setInput("");
+    }
     setLoading(true);
 
     try {
@@ -1046,8 +1215,16 @@ function AIAssistant({ context, containerClass = "", bodyClass = "" }) {
                  <Brain className="w-3 h-3 text-blue-600" />
                </div>
             )}
-            <div className={`max-w-[75%] p-3.5 rounded-2xl text-sm leading-relaxed shadow-sm ${m.role === 'user' ? 'bg-gray-900 text-white rounded-br-sm' : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm'}`}>
-              {m.text}
+            <div className={`max-w-[85%] p-3.5 rounded-2xl text-sm leading-relaxed shadow-sm ${
+              m.role === 'user' 
+                ? 'bg-gray-900 text-white rounded-br-sm' 
+                : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm w-full'
+            }`}>
+              {m.role === 'user' ? (
+                <div className="whitespace-pre-wrap">{m.text}</div>
+              ) : (
+                <ModelMessageBubble text={m.text} />
+              )}
             </div>
           </div>
         ))}
@@ -1066,6 +1243,22 @@ function AIAssistant({ context, containerClass = "", bodyClass = "" }) {
         <div ref={endOfMsgRef} />
       </div>
 
+      {/* Prompt Chips */}
+      {!loading && (
+        <div className="px-4 py-2 bg-white border-t border-gray-100 flex gap-1.5 overflow-x-auto no-scrollbar scroll-smooth">
+          {promptChips.map((chip, idx) => (
+            <button
+              key={idx}
+              onClick={() => handleSend(chip.query)}
+              className="flex-shrink-0 flex items-center gap-1 text-[11px] py-1 px-2.5 bg-gray-50 border border-gray-200 text-gray-600 rounded-full hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 transition-all font-medium cursor-pointer shadow-sm"
+            >
+              <Sparkles className="w-3 h-3 text-blue-500" />
+              {chip.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="p-4 border-t border-gray-200 bg-white">
         <div className="relative flex items-center">
           <input
@@ -1077,7 +1270,7 @@ function AIAssistant({ context, containerClass = "", bodyClass = "" }) {
             className="w-full pl-4 pr-12 py-3 bg-gray-100 border-transparent rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all shadow-inner"
           />
           <button 
-            onClick={handleSend}
+            onClick={() => handleSend()}
             disabled={loading || !input.trim()}
             className="absolute right-1.5 p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 transition shadow-sm"
           >
