@@ -361,6 +361,7 @@ function NcertViewer({ subject, chapter, onBack }) {
   const [blobUrl, setBlobUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef(null);
   const token = localStorage.getItem("token") || "";
 
@@ -426,6 +427,7 @@ function NcertViewer({ subject, chapter, onBack }) {
 
   const handleDrag = (event) => {
     event.preventDefault();
+    setIsDragging(true);
     const startX = event.clientX;
     const startRight = rightWidth;
     const container = containerRef.current;
@@ -438,6 +440,7 @@ function NcertViewer({ subject, chapter, onBack }) {
     };
 
     const onUp = () => {
+      setIsDragging(false);
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
@@ -475,8 +478,11 @@ function NcertViewer({ subject, chapter, onBack }) {
       ) : (
         <div
           ref={containerRef}
-          className="flex flex-col lg:flex-row border border-gray-200 rounded-xl overflow-hidden w-full h-[75vh] min-h-[640px] bg-white shadow-sm"
+          className="relative flex flex-col lg:flex-row border border-gray-200 rounded-xl overflow-hidden w-full h-[75vh] min-h-[640px] bg-white shadow-sm"
         >
+          {isDragging && (
+            <div className="absolute inset-0 z-30 cursor-col-resize bg-transparent" />
+          )}
           <div className="flex-1 bg-gray-50/50 w-full flex flex-col">
             <div className="px-5 py-3 border-b border-gray-200 bg-white flex items-center justify-between">
               <div className="flex items-center gap-3 overflow-x-auto">
