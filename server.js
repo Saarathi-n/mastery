@@ -9,6 +9,8 @@ import { errorHandler, notFound } from './middleware/errorHandler.js';
 import apiRoutes from './routes/index.js';
 import Question from './models/Question.js';
 
+// Complete refactoring: split server.js into modular structure
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
