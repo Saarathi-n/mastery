@@ -128,9 +128,6 @@ export default function SubjectDetails() {
               <span className="inline-flex items-center rounded-full bg-blue-100/80 px-3 py-1 text-xs font-bold text-blue-800 shadow-sm border border-blue-200">
                 Class {classLevel}
               </span>
-              <span className="text-sm font-medium text-gray-600">
-                Select a chapter to begin learning
-              </span>
             </div>
           </div>
       </div>
