@@ -59,26 +59,78 @@ export default function SubjectDetails() {
   const chapter = library.chapters.find((item) => item.name === selectedChapter);
   const classLevel = user?.currentLevel || "11";
 
+  const getTheme = (subjectName) => {
+    switch (subjectName) {
+      case "Physics":
+        return {
+          bg: "from-blue-200/80 via-blue-100/80 to-cyan-100/80",
+          blob1: "bg-blue-400/30",
+          blob2: "bg-cyan-400/30",
+          blob3: "bg-blue-300/30",
+          text: "text-blue-900"
+        };
+      case "Chemistry":
+        return {
+          bg: "from-red-200/80 via-red-100/80 to-orange-100/80",
+          blob1: "bg-red-400/30",
+          blob2: "bg-orange-400/30",
+          blob3: "bg-red-300/30",
+          text: "text-red-900"
+        };
+      case "Mathematics":
+        return {
+          bg: "from-yellow-200/80 via-yellow-100/80 to-amber-100/80",
+          blob1: "bg-yellow-400/30",
+          blob2: "bg-amber-400/30",
+          blob3: "bg-yellow-300/30",
+          text: "text-yellow-900"
+        };
+      case "Biology":
+        return {
+          bg: "from-green-200/80 via-green-100/80 to-emerald-100/80",
+          blob1: "bg-green-400/30",
+          blob2: "bg-emerald-400/30",
+          blob3: "bg-green-300/30",
+          text: "text-green-900"
+        };
+      default:
+        return {
+          bg: "from-indigo-200/80 via-purple-100/80 to-pink-100/80",
+          blob1: "bg-blue-400/20",
+          blob2: "bg-purple-400/20",
+          blob3: "bg-pink-400/20",
+          text: "text-indigo-900"
+        };
+    }
+  };
+
+  const theme = getTheme(name);
+
   return (
-    <div className="bg-background min-h-[85vh] rounded-xl border bg-white shadow-sm flex flex-col overflow-hidden max-w-[95%] mx-auto w-full">
+    <div className={`min-h-[calc(100vh-76px)] bg-gradient-to-br ${theme.bg} flex flex-col overflow-hidden w-full flex-1 relative transition-colors duration-500`}>
+      {/* Decorative colorful blobs */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
+        <div className={`absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full ${theme.blob1} blur-[100px] transition-colors duration-500`}></div>
+        <div className={`absolute top-[40%] -right-[10%] w-[40%] h-[60%] rounded-full ${theme.blob2} blur-[100px] transition-colors duration-500`}></div>
+        <div className={`absolute -bottom-[20%] left-[20%] w-[60%] h-[40%] rounded-full ${theme.blob3} blur-[100px] transition-colors duration-500`}></div>
+      </div>
+      
       {/* Header */}
-      <div className="border-b border-border bg-gray-50/50 px-8 py-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-3xl font-bold tracking-tight text-gray-900">{name}</h2>
-            <div className="flex items-center gap-2 mt-2">
-              <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
+      <div className="border-b border-white/40 bg-white/30 px-8 py-8 flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden z-10">
+          <div className="relative z-10">
+            <h2 className={`text-4xl font-extrabold tracking-tight ${theme.text} mb-2 transition-colors duration-500`}>{name}</h2>
+            <div className="flex items-center gap-3">
+              <span className="inline-flex items-center rounded-full bg-blue-100/80 px-3 py-1 text-xs font-bold text-blue-800 shadow-sm border border-blue-200">
                 Class {classLevel}
               </span>
-              <span className="text-sm text-muted-foreground text-gray-500">
+              <span className="text-sm font-medium text-gray-600">
                 Select a chapter to begin learning
               </span>
             </div>
           </div>
-        </div>
       </div>
 
-      <div className="flex-1 p-6 md:p-8 bg-gray-50/30">
+      <div className="flex-1 p-6 md:p-8 relative z-10">
         {library.loading && (
           <div className="flex items-center justify-center h-48">
             <div className="flex flex-col items-center gap-2">
@@ -204,17 +256,17 @@ function ChapterGrid({ chapters, onSelect }) {
           <button
             key={chapter.name}
             onClick={() => onSelect(chapter.name)}
-            className="group relative flex flex-col items-start justify-between text-left p-6 rounded-xl border border-gray-200 bg-white hover:border-blue-500 hover:shadow-md hover:-translate-y-1 transition-all duration-200"
+            className="group relative flex flex-col items-start justify-between text-left p-6 rounded-2xl border border-white/60 bg-gradient-to-br from-white/60 to-white/30 backdrop-blur-md hover:from-white/80 hover:to-white/50 hover:border-blue-300 hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
           >
             <div className="w-full">
-              <div className="inline-flex items-center rounded-md bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600 mb-3 group-hover:bg-blue-100 group-hover:text-blue-700 transition-colors">
+              <div className="inline-flex items-center rounded-lg bg-blue-50/80 px-2.5 py-1 text-xs font-bold text-blue-700 mb-4 border border-blue-100/50 group-hover:bg-blue-100 transition-colors">
                 Chapter
               </div>
-              <h4 className="text-base font-semibold text-gray-900 leading-tight group-hover:text-blue-700 transition-colors">
+              <h4 className="text-lg font-bold text-gray-900 leading-tight group-hover:text-blue-700 transition-colors">
                 {chapter.name}
               </h4>
             </div>
-            <div className="mt-4 flex items-center text-sm font-medium text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="mt-5 flex items-center text-sm font-bold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity transform translate-y-2 group-hover:translate-y-0 duration-300">
               Explore resources <span className="ml-1">→</span>
             </div>
           </button>
@@ -270,23 +322,30 @@ function SectionCards({ chapterName, onBack, onSelect, onStartMockTest }) {
 
 function ResourceCard({ title, description, icon, color, onClick }) {
   const colorStyles = {
-    blue: "hover:border-blue-500 hover:ring-1 hover:ring-blue-500/20 text-blue-600 bg-blue-50 border-blue-100",
-    emerald: "hover:border-emerald-500 hover:ring-1 hover:ring-emerald-500/20 text-emerald-600 bg-emerald-50 border-emerald-100",
-    purple: "hover:border-purple-500 hover:ring-1 hover:ring-purple-500/20 text-purple-600 bg-purple-50 border-purple-100"
+    blue: "hover:border-blue-400 hover:shadow-blue-500/20 text-blue-700 bg-gradient-to-br from-blue-50 to-white border-blue-200",
+    emerald: "hover:border-emerald-400 hover:shadow-emerald-500/20 text-emerald-700 bg-gradient-to-br from-emerald-50 to-white border-emerald-200",
+    purple: "hover:border-purple-400 hover:shadow-purple-500/20 text-purple-700 bg-gradient-to-br from-purple-50 to-white border-purple-200"
+  };
+
+  const iconBgStyles = {
+    blue: "bg-blue-100 text-blue-600",
+    emerald: "bg-emerald-100 text-emerald-600",
+    purple: "bg-purple-100 text-purple-600"
   };
 
   return (
     <button
       onClick={onClick}
-      className={`group flex flex-col justify-between text-left p-6 rounded-2xl border bg-white shadow-sm hover:shadow-md transition-all duration-200 relative overflow-hidden ${colorStyles[color].split(" ")[0]} ${colorStyles[color].split(" ")[1]}`}
+      className={`group flex flex-col justify-between text-left p-6 rounded-3xl border shadow-lg hover:shadow-2xl transition-all duration-300 relative overflow-hidden transform hover:-translate-y-1 ${colorStyles[color]}`}
     >
-      <div className="relative z-10">
-        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-5 ${colorStyles[color].split(" ").slice(2).join(" ")} transition-colors group-hover:scale-110 duration-300`}>
+      <div className="relative z-10 w-full">
+        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-6 shadow-sm transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3 ${iconBgStyles[color]}`}>
           {icon}
         </div>
-        <h4 className="text-lg font-bold text-gray-900 mb-2">{title}</h4>
-        <p className="text-sm text-gray-500 leading-relaxed">{description}</p>
+        <h4 className="text-xl font-extrabold text-gray-900 mb-2">{title}</h4>
+        <p className="text-sm font-medium text-gray-600 leading-relaxed">{description}</p>
       </div>
+      <div className="absolute -bottom-4 -right-4 w-32 h-32 rounded-full bg-white/40 blur-2xl group-hover:bg-white/60 transition-colors" />
     </button>
   );
 }

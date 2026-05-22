@@ -53,10 +53,8 @@ export default function Layout() {
           </div>
         </div>
       </nav>
-      <main className="max-w-7xl mx-auto px-4 py-8 md:px-6 md:py-10">
-        <div className="glass-card rounded-3xl p-6 md:p-8">
-          <Outlet />
-        </div>
+      <main className="w-full flex-1">
+        <Outlet />
       </main>
 
       {showLogoutConfirm && (
