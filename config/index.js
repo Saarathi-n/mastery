@@ -23,8 +23,8 @@ export default {
     useCloudinary: process.env.USE_CLOUDINARY === 'true',
   },
   ai: {
-    geminiApiKey: process.env.GEMINI_API_KEY || '',
-    nvidiaApiKey: process.env.NVIDIA_API_KEY || '',
+    geminiApiKey: process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '',
+    nvidiaApiKey: process.env.NVIDIA_API_KEY || process.env.VITE_NVIDIA_API_KEY || '',
   },
   paths: {
     libraryRoot: process.env.LIBRARY_ROOT || '',
