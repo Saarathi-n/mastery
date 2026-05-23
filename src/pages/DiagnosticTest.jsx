@@ -1,6 +1,7 @@
+
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Brain, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Brain, CheckCircle2, AlertTriangle, Clock, Hourglass } from "lucide-react";
 
 export default function DiagnosticTest() {
   const navigate = useNavigate();
@@ -8,6 +9,23 @@ export default function DiagnosticTest() {
   const [answers, setAnswers] = useState({});
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(3 * 60 * 60); // 3 hours in seconds
+
+  // Timer effect
+  useEffect(() => {
+    if (loading) return;
+    const timer = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          handleSubmit();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [loading]);
 
   useEffect(() => {
     try {
@@ -21,12 +39,12 @@ export default function DiagnosticTest() {
       const token = localStorage.getItem("token");
       const exam = parsedUser.stream === 'Both' ? 'JEE' : parsedUser.stream;
 
-      fetch(`/api/screentest/questions?exam=${exam}`, {
+      fetch(`/api/questions/diagnostic?type=diagnostic&exam=${exam}`, {
         headers: { "Authorization": `Bearer ${token}` }
       })
         .then(res => {
           if (!res.ok) {
-            return fetch(`/api/questions?type=diagnostic&exam=${exam}`, {
+            return fetch(`/api/screentest/questions?exam=${exam}`, {
               headers: { "Authorization": `Bearer ${token}` }
             });
           }
@@ -36,7 +54,7 @@ export default function DiagnosticTest() {
           if (data && data.length > 0) {
             setQuestions(data);
           } else {
-            return fetch(`/api/questions?type=diagnostic&exam=${exam}`, {
+            return fetch(`/api/screentest/questions?exam=${exam}`, {
               headers: { "Authorization": `Bearer ${token}` }
             }).then(res => res.json());
           }
@@ -55,6 +73,13 @@ export default function DiagnosticTest() {
     }
   }, [navigate]);
 
+  const formatTime = (seconds) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
   const handleSubmit = async () => {
     if (!user) return;
     let score = 0;
@@ -67,22 +92,18 @@ export default function DiagnosticTest() {
     const isNEET = user.stream === 'NEET';
     const isJEE = user.stream === 'JEE';
     
-    let passed = false;
     let nextLevel = "11th";
     
     if (isNEET) {
-      if (score >= 55) { // 55/100 for NEET
-        passed = true;
+      if (score >= 500) { 
         nextLevel = "12th";
       }
     } else if (isJEE) {
-      if (score >= 15) { // 15/100 for JEE
-        passed = true;
+      if (score >= 150) {
         nextLevel = "12th";
       }
     } else { // Both
-      if (score >= 35) { // 35/100 for Both
-        passed = true;
+      if (score >= 325) {
         nextLevel = "12th";
       }
     }
@@ -119,6 +140,7 @@ export default function DiagnosticTest() {
     user.currentLevel = nextLevel;
     localStorage.setItem("user", JSON.stringify(user));
     
+    const passed = nextLevel === "12th";
     alert(`You scored ${score} point(s). ${passed ? 'Congratulations, you passed!' : 'You need to strengthen your foundation.'} You will start from ${nextLevel} syllabus.`);
     navigate("/dashboard");
   };
@@ -126,22 +148,28 @@ export default function DiagnosticTest() {
   if (loading) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh]">
       <div className="h-12 w-12 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent mb-6"></div>
-      <div className="text-xl font-semibold text-gray-700">Loading Diagnostic Test...</div>
+      <div className="text-xl font-semibold text-gray-700">Loading Screening Test...</div>
     </div>
   );
 
   return (
     <div className="max-w-4xl mx-auto">
       <div className="text-center mb-12 pb-8 border-b-2 border-gray-100">
-        <div className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-100 to-purple-100 px-6 py-3 rounded-full mb-6">
-          <Brain className="w-6 h-6 text-indigo-600" />
-          <span className="text-indigo-800 font-bold text-sm">Diagnostic Test</span>
+        <div className="flex items-center justify-between mb-8">
+          <div className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-100 to-purple-100 px-6 py-3 rounded-full">
+            <Brain className="w-6 h-6 text-indigo-600" />
+            <span className="text-indigo-800 font-bold text-sm">Screening Test</span>
+          </div>
+          <div className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-100 to-orange-100 px-6 py-3 rounded-full">
+            <Clock className="w-6 h-6 text-amber-700" />
+            <span className="text-amber-900 font-bold text-lg">{formatTime(timeLeft)}</span>
+          </div>
         </div>
         <h2 className="text-4xl font-extrabold text-gray-900 mb-4">Let's assess your skills</h2>
         <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
-          Let's assess your current foundations to determine the best starting point for you. 
+          This is a 3-hour screening test to determine your starting syllabus.
           You need <span className="font-bold text-gray-900 bg-gradient-to-r from-indigo-100 to-purple-100 px-3 py-1 rounded-full">
-            {user?.stream === 'NEET' ? '55+' : user?.stream === 'JEE' ? '15+' : '35+'}
+            {user?.stream === 'NEET' ? '500+' : user?.stream === 'JEE' ? '150+' : '325+'}
           </span> to access the 12th syllabus.
         </p>
       </div>
@@ -205,7 +233,7 @@ export default function DiagnosticTest() {
            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center mb-6 shadow-inner">
              <AlertTriangle className="w-10 h-10 text-gray-500" />
            </div>
-           <p className="text-xl font-semibold text-gray-700 mb-2">No diagnostic questions available yet.</p>
+           <p className="text-xl font-semibold text-gray-700 mb-2">No screening questions available yet.</p>
            <p className="text-gray-500">You can skip the test for now.</p>
         </div>
       )}
@@ -221,9 +249,10 @@ export default function DiagnosticTest() {
           onClick={handleSubmit}
           className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-10 py-4 rounded-2xl font-bold text-lg shadow-2xl hover:shadow-3xl hover:-translate-y-1 transition-all duration-300"
         >
-          Submit Diagnostic Test
+          Submit Screening Test
         </button>
       </div>
     </div>
   );
 }
+

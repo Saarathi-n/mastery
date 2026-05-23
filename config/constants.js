@@ -14,9 +14,9 @@ export const STREAMS = ["JEE", "NEET", "Both"];
 export const GRADES = ["11th", "12th", "Dropper"];
 
 export const SCREEN_TEST_PASS_SCORES = {
-  NEET: 55,
-  JEE: 15,
-  Both: 35
+  NEET: 500,
+  JEE: 150,
+  Both: 325
 };
 
 export const CLOUDINARY_ROOTS = {

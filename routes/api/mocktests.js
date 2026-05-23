@@ -1,6 +1,6 @@
 
 import express from 'express';
-import { submitMockTest } from '../../controllers/mocktestController.js';
+import { submitMockTest } from '../../controllers/mockTestController.js';
 import { authenticate } from '../../middleware/auth.js';
 
 const router = express.Router();
