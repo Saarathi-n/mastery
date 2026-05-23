@@ -28,49 +28,58 @@ export default function DiagnosticTest() {
   }, [loading]);
 
   useEffect(() => {
-    try {
-      const u = localStorage.getItem("user");
-      if (!u) {
-        navigate("/login");
-        return;
-      }
-      const parsedUser = JSON.parse(u);
-      setUser(parsedUser);
-      const token = localStorage.getItem("token");
-      const exam = parsedUser.stream === 'Both' ? 'JEE' : parsedUser.stream;
+    const loadQuestions = async () => {
+      try {
+        const u = localStorage.getItem("user");
+        if (!u) {
+          navigate("/login");
+          return;
+        }
+        const parsedUser = JSON.parse(u);
+        setUser(parsedUser);
+        const token = localStorage.getItem("token");
+        const exam = parsedUser.stream === 'Both' ? 'JEE' : parsedUser.stream;
 
-      fetch(`/api/questions/diagnostic?type=diagnostic&exam=${exam}`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      })
-        .then(res => {
-          if (!res.ok) {
-            return fetch(`/api/screentest/questions?exam=${exam}`, {
-              headers: { "Authorization": `Bearer ${token}` }
-            });
+        // First try the screentest endpoint (Cloudinary + MongoDB fallback)
+        try {
+          const screenRes = await fetch(`/api/screentest/questions?exam=${exam}`, {
+            headers: { "Authorization": `Bearer ${token}` }
+          });
+          if (screenRes.ok) {
+            const screenData = await screenRes.json();
+            if (Array.isArray(screenData) && screenData.length > 0) {
+              setQuestions(screenData);
+              setLoading(false);
+              return;
+            }
           }
-          return res.json();
-        })
-        .then(data => {
-          if (data && data.length > 0) {
-            setQuestions(data);
-          } else {
-            return fetch(`/api/screentest/questions?exam=${exam}`, {
-              headers: { "Authorization": `Bearer ${token}` }
-            }).then(res => res.json());
+        } catch (err) {
+          console.error('Screentest fetch error:', err);
+        }
+
+        // Fallback: try the diagnostic questions endpoint
+        try {
+          const diagRes = await fetch(`/api/questions/diagnostic?type=diagnostic&exam=${exam}`, {
+            headers: { "Authorization": `Bearer ${token}` }
+          });
+          if (diagRes.ok) {
+            const diagData = await diagRes.json();
+            if (Array.isArray(diagData) && diagData.length > 0) {
+              setQuestions(diagData);
+            }
           }
-        })
-        .then(data => {
-          if (data) setQuestions(data);
-          setLoading(false);
-        })
-        .catch(err => {
-          console.error(err);
-          setLoading(false);
-        });
-    } catch (e) {
-      localStorage.removeItem("user");
-      navigate("/login");
-    }
+        } catch (err) {
+          console.error('Diagnostic fetch error:', err);
+        }
+
+        setLoading(false);
+      } catch (e) {
+        localStorage.removeItem("user");
+        navigate("/login");
+      }
+    };
+
+    loadQuestions();
   }, [navigate]);
 
   const formatTime = (seconds) => {

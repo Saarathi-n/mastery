@@ -1,6 +1,7 @@
 
 import Question from '../models/Question.js';
 import cloudinary, { searchCloudinaryRawResources } from '../utils/cloudinary.js';
+import { parseDocxFromUrl } from '../utils/parseDocxQuestions.js';
 import config from '../config/index.js';
 import { SUBJECTS } from '../config/constants.js';
 
@@ -77,23 +78,24 @@ export async function getScreenTestQuestions(req, res) {
     
     let questions = [];
     
-    // Try to get JSON questions from Cloudinary
+    // Try to get questions from Cloudinary (JSON or DOCX)
     for (const resource of resources) {
-      if (resource.filename?.toLowerCase().endsWith('.json') || 
-          resource.format === 'json' || 
-          resource.public_id?.toLowerCase().endsWith('.json')) {
+      const pid = resource.public_id?.toLowerCase() || '';
+      const fname = resource.filename?.toLowerCase() || '';
+      const fmt = resource.format?.toLowerCase() || '';
+
+      const url = cloudinary.url(resource.public_id, {
+        resource_type: 'raw',
+        type: 'upload',
+      });
+
+      // --- Handle JSON files ---
+      if (fname.endsWith('.json') || fmt === 'json' || pid.endsWith('.json')) {
         try {
           console.log('Fetching JSON file:', resource.public_id);
-          const url = cloudinary.utils.private_download_url(
-            resource.public_id, 
-            'json', 
-            { resource_type: 'raw' }
-          );
-          
           const response = await fetch(url);
           if (response.ok) {
             const data = await response.json();
-            console.log('Parsed JSON data:', data);
             if (Array.isArray(data)) {
               questions.push(...data);
             } else if (data.questions) {
@@ -102,6 +104,18 @@ export async function getScreenTestQuestions(req, res) {
           }
         } catch (err) {
           console.error('Error parsing JSON from Cloudinary:', err);
+        }
+      }
+
+      // --- Handle DOCX files ---
+      else if (fname.endsWith('.docx') || fmt === 'docx' || pid.endsWith('.docx')) {
+        try {
+          console.log('Parsing DOCX file:', resource.public_id);
+          const parsed = await parseDocxFromUrl(url, exam);
+          console.log(`Parsed ${parsed.length} MCQ questions from docx`);
+          questions.push(...parsed);
+        } catch (err) {
+          console.error('Error parsing DOCX from Cloudinary:', err);
         }
       }
     }
