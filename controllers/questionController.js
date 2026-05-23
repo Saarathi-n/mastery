@@ -1,6 +1,6 @@
 
 import Question from '../models/Question.js';
-import cloudinary, { searchCloudinaryRawResources } from '../utils/cloudinary.js';
+import cloudinary, { searchCloudinaryRawResources, resourceDownloadUrl } from '../utils/cloudinary.js';
 import { parseDocxFromUrl } from '../utils/parseDocxQuestions.js';
 import config from '../config/index.js';
 import { SUBJECTS } from '../config/constants.js';
@@ -84,10 +84,7 @@ export async function getScreenTestQuestions(req, res) {
       const fname = resource.filename?.toLowerCase() || '';
       const fmt = resource.format?.toLowerCase() || '';
 
-      const url = cloudinary.url(resource.public_id, {
-        resource_type: 'raw',
-        type: 'upload',
-      });
+      const url = resourceDownloadUrl(resource);
 
       // --- Handle JSON files ---
       if (fname.endsWith('.json') || fmt === 'json' || pid.endsWith('.json')) {
