@@ -15,7 +15,7 @@ function isNumericalSection(line) {
 }
 
 function isMcqSection(line) {
-  return /Section A/i.test(line) || /MCQ/i.test(line);
+  return /Section[-\s]*A/i.test(line) || /MCQ/i.test(line);
 }
 
 function parseOptions(optionLine) {
@@ -23,13 +23,18 @@ function parseOptions(optionLine) {
   // Also handles multiline options across subsequent lines
   const opts = [];
   // Match all option blocks: (A)..., (B)..., (C)..., (D)...
-  const regex = /\([A-D]\)\s*(.*?)(?=\s*\([A-D]\)|$)/g;
+  // Match letter options (A-D) or numeric options (1-4)
+  const regex = /\(([A-D1-4])\)\s*(.*?)(?=\s*\([A-D1-4]\)|$)/g;
   let m;
   while ((m = regex.exec(optionLine)) !== null) {
-    const text = m[1].trim();
+    const text = m[2].trim();
     if (text) opts.push(text);
   }
   return opts;
+}
+
+function looksLikeFigureQuestion(text) {
+  return /(diagram|figure|graph|circuit|as shown|shown in|as given)/i.test(text || '');
 }
 
 /**
@@ -38,7 +43,7 @@ function parseOptions(optionLine) {
  * @param {string} exam - 'JEE' or 'NEET'
  * @returns {Array} questions
  */
-export function parseQuestionsFromText(rawText, exam = 'JEE') {
+export function parseQuestionsFromText(rawText, exam = 'JEE', imagePool = []) {
   const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
 
   const questions = [];
@@ -90,7 +95,7 @@ export function parseQuestionsFromText(rawText, exam = 'JEE') {
     while (i < lines.length) {
       const next = lines[i];
       // Stop if next line is an option line
-      if (/^\([A-D]\)/.test(next)) break;
+      if (/^\([A-D1-4]\)/.test(next) || /^[A-D1-4]\)/.test(next)) break;
       // Stop if next line is the next question
       if (/^Q\d+\./.test(next)) break;
       // Stop if it's a section/subject header
@@ -99,18 +104,18 @@ export function parseQuestionsFromText(rawText, exam = 'JEE') {
       i++;
     }
 
-    // Now collect option lines
+    // Now collect option lines (supports (A), (B)... and (1), (2)... formats, and alternate A) or 1) forms)
     let optionText = '';
     while (i < lines.length) {
       const next = lines[i];
-      if (/^\([A-D]\)/.test(next)) {
+      if (/^\([A-D1-4]\)/.test(next)) {
         optionText += ' ' + next;
         i++;
-      } else if (/^[A-D]\)/.test(next)) {
-        // alternate format: "A) text"
+      } else if (/^[A-D1-4]\)/.test(next) || /^[1-4]\)/.test(next)) {
+        // alternate format: "A) text" or "1) text"
         optionText += ' (' + next;
         i++;
-      } else if (optionText && /^\([C-D]\)/.test(next)) {
+      } else if (optionText && /^\([C-D1-4]\)/.test(next)) {
         // Still options
         optionText += ' ' + next;
         i++;
@@ -138,6 +143,7 @@ export function parseQuestionsFromText(rawText, exam = 'JEE') {
         options,
         correctAnswer: options[0], // placeholder — will need manual correction or answer key
         explanation: '',
+        image: looksLikeFigureQuestion(questionText) && imagePool.length ? imagePool.shift() : undefined,
       });
     }
   }
@@ -154,6 +160,14 @@ export async function parseDocxFromUrl(url, exam = 'JEE') {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Failed to fetch docx: ${response.status}`);
   const buffer = await response.arrayBuffer();
-  const result = await mammoth.extractRawText({ buffer: Buffer.from(buffer) });
-  return parseQuestionsFromText(result.value, exam);
+  const docBuffer = Buffer.from(buffer);
+  const textResult = await mammoth.extractRawText({ buffer: docBuffer });
+  const htmlResult = await mammoth.convertToHtml({ buffer: docBuffer });
+
+  const html = htmlResult.value || '';
+  const imagePool = [...html.matchAll(/<img[^>]*src="([^"]+)"/gi)]
+    .map((m) => m[1])
+    .filter(Boolean);
+
+  return parseQuestionsFromText(textResult.value, exam, imagePool);
 }

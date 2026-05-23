@@ -5,6 +5,20 @@ import { parseDocxFromUrl } from '../utils/parseDocxQuestions.js';
 import config from '../config/index.js';
 import { SUBJECTS } from '../config/constants.js';
 
+function normalizeQuestions(items = []) {
+  return items
+    .map((q) => {
+      const obj = q?.toObject ? q.toObject() : q;
+      const options = Array.isArray(obj?.options) ? obj.options.filter(Boolean) : [];
+      return {
+        ...obj,
+        id: obj?.id || obj?._id,
+        options,
+      };
+    })
+    .filter((q) => q && typeof q.question === 'string' && q.question.trim().length > 0 && q.options.length >= 2);
+}
+
 export async function getQuestions(req, res) {
   try {
     const { subject, class: _class, type, exam } = req.query;
@@ -15,7 +29,7 @@ export async function getQuestions(req, res) {
     if (exam && exam !== 'Both') filter.exam = exam;
 
     const questions = await Question.find(filter);
-    res.json(questions.map((q) => ({ ...q.toObject(), id: q._id })));
+    res.json(normalizeQuestions(questions));
   } catch (err) {
     res.status(500).json({ error: "Server error" });
   }
@@ -51,7 +65,7 @@ export async function getDiagnosticQuestions(req, res) {
       questions = shuffled;
     }
 
-    res.json(questions.map((q) => ({ ...q.toObject(), id: q._id })));
+    res.json(normalizeQuestions(questions));
   } catch (err) {
     res.status(500).json({ error: "Server error" });
   }
@@ -155,8 +169,9 @@ export async function getScreenTestQuestions(req, res) {
       questions = shuffled;
     }
 
-    console.log('Total questions found:', questions.length);
-    res.json(questions.map(q => q._id ? { ...q, id: q._id } : q));
+    const normalized = normalizeQuestions(questions);
+    console.log('Total questions found:', normalized.length);
+    res.json(normalized);
   } catch (err) {
     console.error('Error in screentest questions:', err);
     res.status(500).json({ error: err.message });

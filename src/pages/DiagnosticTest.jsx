@@ -3,6 +3,20 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Brain, CheckCircle2, AlertTriangle, Clock, Hourglass } from "lucide-react";
 
+function normalizeQuestions(items) {
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((q, idx) => ({
+      ...q,
+      id: q?.id || q?._id || `q-${idx}`,
+      options: Array.isArray(q?.options) ? q.options.filter(Boolean) : [],
+      question: typeof q?.question === 'string' ? q.question : '',
+      subject: q?.subject || 'General',
+      image: typeof q?.image === 'string' && q.image.trim() ? q.image : null,
+    }))
+    .filter((q) => q.question && q.options.length >= 2);
+}
+
 export default function DiagnosticTest() {
   const navigate = useNavigate();
   const [questions, setQuestions] = useState([]);
@@ -47,8 +61,9 @@ export default function DiagnosticTest() {
           });
           if (screenRes.ok) {
             const screenData = await screenRes.json();
-            if (Array.isArray(screenData) && screenData.length > 0) {
-              setQuestions(screenData);
+            const normalized = normalizeQuestions(screenData);
+            if (normalized.length > 0) {
+              setQuestions(normalized);
               setLoading(false);
               return;
             }
@@ -64,8 +79,9 @@ export default function DiagnosticTest() {
           });
           if (diagRes.ok) {
             const diagData = await diagRes.json();
-            if (Array.isArray(diagData) && diagData.length > 0) {
-              setQuestions(diagData);
+            const normalized = normalizeQuestions(diagData);
+            if (normalized.length > 0) {
+              setQuestions(normalized);
             }
           }
         } catch (err) {
@@ -93,7 +109,7 @@ export default function DiagnosticTest() {
     if (!user) return;
     let score = 0;
     questions.forEach(q => {
-      if (answers[q._id || q.id] === q.correctAnswer) {
+      if (answers[q.id] === q.correctAnswer) {
         score += 1;
       }
     });
@@ -185,7 +201,7 @@ export default function DiagnosticTest() {
 
       <div className="space-y-8">
         {questions.map((q, i) => (
-          <div key={q._id || q.id} className="glass-card p-8 rounded-3xl">
+          <div key={q.id} className="glass-card p-8 rounded-3xl">
             <div className="flex items-center gap-4 mb-6">
               <span className="flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-500 text-white font-bold text-lg shadow-lg">
                 {i + 1}
@@ -198,10 +214,21 @@ export default function DiagnosticTest() {
             <p className="font-semibold text-xl text-gray-900 mb-8 leading-relaxed ml-14">
               {q.question}
             </p>
+
+            {q.image && (
+              <div className="ml-14 mb-8">
+                <img
+                  src={q.image}
+                  alt={`Question ${i + 1} figure`}
+                  className="max-h-[360px] w-auto rounded-xl border border-gray-200 bg-white p-2 shadow-sm"
+                  loading="lazy"
+                />
+              </div>
+            )}
             
             <div className="space-y-4 ml-14">
               {q.options.map((opt) => {
-                const isSelected = answers[q._id || q.id] === opt;
+                const isSelected = answers[q.id] === opt;
                 return (
                   <label 
                     key={opt} 
@@ -214,10 +241,10 @@ export default function DiagnosticTest() {
                     <div className="relative flex items-center justify-center">
                       <input
                         type="radio"
-                        name={q._id || q.id}
+                        name={q.id}
                         value={opt}
                         checked={isSelected}
-                        onChange={(e) => setAnswers({ ...answers, [q._id || q.id]: e.target.value })}
+                        onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
                         className="peer sr-only"
                       />
                       <div className={`w-7 h-7 rounded-full border-4 flex items-center justify-center transition-all duration-300 ${
