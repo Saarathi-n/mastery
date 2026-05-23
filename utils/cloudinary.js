@@ -34,7 +34,7 @@ export function resourceFolder(resource) {
 export async function searchCloudinaryRawResources(folderPrefix) {
   const resources = [];
   let nextCursor = null;
-  const expression = `folder:${escapeCloudinaryFolderPath(folderPrefix)}/* AND resource_type:raw`;
+  const expression = `folder:${escapeCloudinaryFolderPath(folderPrefix)} AND resource_type:raw`;
 
   do {
     let builder = cloudinary.search.expression(expression).max_results(500);
