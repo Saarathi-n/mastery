@@ -36,23 +36,32 @@ export async function getLibraryChapters(req, res) {
 
     for (const resource of resources) {
       const relativeParts = splitCloudinaryFolder(resourceFolder(resource)).slice(subjectParts.length);
+      const fileName = resourceName(resource);
       let chapterName = relativeParts[0];
       let sectionName = relativeParts[1];
-      const fileName = resourceName(resource);
 
-      if (!chapterName || !sectionName) {
-        if (relativeParts.length <= 1) {
-          const { extractChapterFromFilename, getVirtualChapterName } = await import('../utils/helpers.js');
-          const chapterNum = extractChapterFromFilename(fileName);
-          if (chapterNum) {
-            chapterName = getVirtualChapterName(chapterNum, subject);
-            sectionName = SECTION_FOLDERS.ncert;
-          } else {
-            chapterName = 'Supplementary';
-            sectionName = SECTION_FOLDERS.ncert;
-          }
+      if (relativeParts.length === 0) {
+        const { extractChapterFromFilename, getVirtualChapterName } = await import('../utils/helpers.js');
+        const chapterNum = extractChapterFromFilename(fileName);
+        if (chapterNum) {
+          chapterName = getVirtualChapterName(chapterNum, subject);
+          sectionName = SECTION_FOLDERS.ncert;
         } else {
-          continue;
+          chapterName = 'Supplementary';
+          sectionName = SECTION_FOLDERS.ncert;
+        }
+      } else if (relativeParts.length === 1) {
+        chapterName = relativeParts[0];
+        sectionName = SECTION_FOLDERS.ncert;
+      } else if (!chapterName || !sectionName) {
+        const { extractChapterFromFilename, getVirtualChapterName } = await import('../utils/helpers.js');
+        const chapterNum = extractChapterFromFilename(fileName);
+        if (chapterNum) {
+          chapterName = getVirtualChapterName(chapterNum, subject);
+          sectionName = SECTION_FOLDERS.ncert;
+        } else {
+          chapterName = 'Supplementary';
+          sectionName = SECTION_FOLDERS.ncert;
         }
       }
 
@@ -113,6 +122,11 @@ export async function getLibraryFile(req, res) {
     let resource = resources.find((item) => resourceMatchesFile(item, file));
 
     if (!resource) {
+      resources = await searchCloudinaryRawResources(`${subjectPrefix}/${chapter}`);
+      resource = resources.find((item) => resourceMatchesFile(item, file));
+    }
+
+    if (!resource) {
       resources = await searchCloudinaryRawResources(subjectPrefix);
       resource = resources.find((item) => resourceMatchesFile(item, file));
     }
@@ -140,8 +154,19 @@ export async function getLibraryAsset(req, res) {
       return res.status(400).json({ error: "Invalid subject or class" });
     }
 
-    const resources = await searchCloudinaryRawResources(`${subjectPrefix}/${chapter}/${section}`);
-    const resource = resources.find((item) => resourceMatchesFile(item, file));
+    let resources = await searchCloudinaryRawResources(`${subjectPrefix}/${chapter}/${section}`);
+    let resource = resources.find((item) => resourceMatchesFile(item, file));
+
+    if (!resource) {
+      resources = await searchCloudinaryRawResources(`${subjectPrefix}/${chapter}`);
+      resource = resources.find((item) => resourceMatchesFile(item, file));
+    }
+
+    if (!resource) {
+      resources = await searchCloudinaryRawResources(subjectPrefix);
+      resource = resources.find((item) => resourceMatchesFile(item, file));
+    }
+
     if (!resource) {
       return res.status(404).json({ error: "File not found" });
     }
@@ -174,8 +199,13 @@ export async function getLibraryPYQ(req, res) {
     }
 
     const files = [];
-    const resources = await searchCloudinaryRawResources(`${subjectPrefix}/${chapter}/${SECTION_FOLDERS.pyq}`);
-    const resource = resources.find((item) => resourceMatchesFile(item, "questions.json")) || resources[0];
+    let resources = await searchCloudinaryRawResources(`${subjectPrefix}/${chapter}/${SECTION_FOLDERS.pyq}`);
+    let resource = resources.find((item) => resourceMatchesFile(item, "questions.json")) || resources[0];
+
+    if (!resource) {
+      resources = await searchCloudinaryRawResources(`${subjectPrefix}/${chapter}`);
+      resource = resources.find((item) => resourceMatchesFile(item, "questions.json")) || resources[0];
+    }
 
     if (resource) {
       const fetchRes = await fetch(resourceDownloadUrl(resource));
@@ -242,8 +272,13 @@ export async function getLibraryMockTest(req, res) {
     }
 
     const files = [];
-    const resources = await searchCloudinaryRawResources(`${subjectPrefix}/${chapter}/${SECTION_FOLDERS.mocktest}`);
-    const resource = resources.find((item) => resourceMatchesFile(item, "questions.json")) || resources[0];
+    let resources = await searchCloudinaryRawResources(`${subjectPrefix}/${chapter}/${SECTION_FOLDERS.mocktest}`);
+    let resource = resources.find((item) => resourceMatchesFile(item, "questions.json")) || resources[0];
+
+    if (!resource) {
+      resources = await searchCloudinaryRawResources(`${subjectPrefix}/${chapter}`);
+      resource = resources.find((item) => resourceMatchesFile(item, "questions.json")) || resources[0];
+    }
 
     if (resource) {
       const fetchRes = await fetch(resourceDownloadUrl(resource));
