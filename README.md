@@ -4,7 +4,7 @@
 
 Mastery is an AI-assisted learning platform for JEE and NEET prep. It combines diagnostic tests, subject dashboards, PDF-based study workflows, mock tests, and AI-powered help in one app.
 
-View the live app: https://ai.studio/apps/7e5c0bbe-78c0-429d-9a16-e65dafdcc71c
+View the live app: https://mastery-theta-beige.vercel.app/
 
 ## Features
 
